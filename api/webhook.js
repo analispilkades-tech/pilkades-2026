@@ -135,34 +135,40 @@ async function runOCR(imageBuffer) {
   try {
     console.log('[OCR] Membuat worker Tesseract...');
 
-    worker = await createWorker('eng', 1, {
-      workerPath:
-        'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/worker.min.js',
+    worker = await createWorker(
+      'eng',
+      1,
+      {
+        workerPath:
+          'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/worker.min.js',
 
-      corePath:
-        'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0',
+        corePath:
+          'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0',
 
-      langPath:
-        'https://tessdata.projectnaptha.com/4.0.0',
+        langPath:
+          'https://tessdata.projectnaptha.com/4.0.0',
 
-      cachePath: '/tmp',
+        cachePath: '/tmp',
 
-      logger: (m) => {
-        if (m?.status) {
-          console.log(
-            `[OCR] ${m.status} ${Math.round((m.progress || 0) * 100)}%`
-          );
+        logger: (m) => {
+          if (m?.status) {
+            console.log(
+              `[OCR] ${m.status} ${Math.round((m.progress || 0) * 100)}%`
+            );
+          }
         }
       }
-    });
+    );
 
-    console.log('[OCR] Worker siap. Memulai pembacaan gambar...');
+    console.log('[OCR] Worker siap.');
 
     await worker.setParameters({
       tessedit_char_whitelist:
         '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:-/#.',
       preserve_interword_spaces: '1'
     });
+
+    console.log('[OCR] Memulai pembacaan gambar...');
 
     const result = await worker.recognize(imageBuffer);
 
@@ -184,11 +190,7 @@ async function runOCR(imageBuffer) {
       error?.stack || error?.message || error
     );
 
-    return {
-      text: '',
-      confidence: 0,
-      error: error?.message || String(error)
-    };
+    throw error;
 
   } finally {
     if (worker) {
