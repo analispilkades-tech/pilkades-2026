@@ -89,6 +89,40 @@ async function downloadTelegramFile(fileId) {
 }
 
 /* =========================================================
+   FUNGSI LOG AKTIVITAS (AUDIT LOG)
+========================================================= */
+
+async function logAktivitas({
+  sumber_aksi = 'TELEGRAM_BOT',
+  jenis_aksi,
+  nrp_saksi = null,
+  nama_saksi = null,
+  kecamatan = null,
+  desa = null,
+  tps = null,
+  data_sebelum = null,
+  data_sesudah = null,
+  keterangan = ''
+}) {
+  try {
+    await supabase.from('log_aktivitas').insert({
+      sumber_aksi,
+      jenis_aksi,
+      nrp_saksi,
+      nama_saksi,
+      kecamatan,
+      desa,
+      tps,
+      data_sebelum,
+      data_sesudah,
+      keterangan
+    });
+  } catch (e) {
+    console.error('LOG AKTIVITAS ERROR:', e);
+  }
+}
+
+/* =========================================================
    OCR BACKGROUND PROCESS (TESSERACT.JS)
 ========================================================= */
 
@@ -173,11 +207,23 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     const { data: dbHasil } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
     
     if (!dbHasil) {
-      await supabase.from('hasil_suara').upsert({
+      const payloadPlano = {
         kecamatan: petugas.kecamatan, desa: petugas.desa, tps: tpsTarget, nrp_saksi: petugas.nrp, nama_saksi: petugas.nama_petugas,
         status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', telegram_photo_file_id: fileId,
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
-      }, { onConflict: 'kecamatan,desa,tps' });
+      };
+      await supabase.from('hasil_suara').upsert(payloadPlano, { onConflict: 'kecamatan,desa,tps' });
+
+      await logAktivitas({
+        jenis_aksi: 'UPLOAD_PLANO',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: tpsTarget,
+        data_sesudah: ocrRes,
+        keterangan: `Upload Foto Plano TPS ${tpsTarget} (Belum ada data input manual)`
+      });
       return;
     }
 
@@ -192,12 +238,39 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       await supabase.from('hasil_suara').update({
         status_verifikasi: 'AUTO VERIFIED', telegram_photo_file_id: fileId
       }).eq('id', dbHasil.id);
+
+      await logAktivitas({
+        jenis_aksi: 'AUTO_VERIFIED',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: tpsTarget,
+        data_sebelum: { status_verifikasi: dbHasil.status_verifikasi },
+        data_sesudah: { status_verifikasi: 'AUTO VERIFIED' },
+        keterangan: `Foto Plano TPS ${tpsTarget} terverifikasi otomatis (Sesuai dengan input manual)`
+      });
+
       await sendMessage(chatId, `✅ <b>FOTO PLANO TPS ${escapeHtml(tpsTarget)} TERVERIFIKASI (AUTO VERIFIED)</b>`);
     } else {
       await supabase.from('hasil_suara').update({
         status_verifikasi: 'PLANO TIDAK SESUAI', telegram_photo_file_id: fileId,
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
       }).eq('id', dbHasil.id);
+
+      await logAktivitas({
+        jenis_aksi: 'PLANO_TIDAK_SESUAI',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: tpsTarget,
+        data_sebelum: {
+          suara_01: dbHasil.suara_calon_01, suara_02: dbHasil.suara_calon_02, suara_03: dbHasil.suara_calon_03, suara_04: dbHasil.suara_calon_04, suara_05: dbHasil.suara_calon_05, ts: dbHasil.suara_tidak_sah
+        },
+        data_sesudah: ocrRes,
+        keterangan: `Ketidakcocokan ditemukan antara Foto Plano dan Input Manual TPS ${tpsTarget}`
+      });
 
       const manualVote = {
         calon_01: dbHasil.suara_calon_01, calon_02: dbHasil.suara_calon_02, calon_03: dbHasil.suara_calon_03, calon_04: dbHasil.suara_calon_04, calon_05: dbHasil.suara_calon_05,
@@ -300,18 +373,44 @@ export default async function handler(req, res) {
 
       const { data: masterP } = await supabase.from('master_petugas').select('*').eq('nrp', nrpInput).maybeSingle();
       if (!masterP) {
+        await logAktivitas({
+          jenis_aksi: 'REGISTRASI_NRP_GAGAL',
+          nrp_saksi: nrpInput,
+          keterangan: `Percobaan registrasi gagal: NRP ${nrpInput} tidak ditemukan`
+        });
         await sendMessage(chatId, `❌ <b>NRP TIDAK TERDAFTAR. SILAHKAN HUBUNGI ADMIN</b>`);
         return res.status(200).json({ ok: true });
       }
 
       await supabase.from('master_petugas').update({ chat_id_telegram: `WAIT_${chatId}` }).eq('nrp', nrpInput);
+
+      await logAktivitas({
+        jenis_aksi: 'REGISTRASI_NRP_FOUND',
+        nrp_saksi: masterP.nrp,
+        nama_saksi: masterP.nama_petugas,
+        kecamatan: masterP.kecamatan,
+        desa: masterP.desa,
+        keterangan: `Verifikasi NRP ${masterP.nrp} berhasil, menunggu verifikasi PIN`
+      });
+
       await sendMessage(chatId, `✅ <b>NRP TERVERIFIKASI</b>\n\nHalo <b>${escapeHtml(masterP.nama_petugas)}</b>.\n\nNRP Anda berhasil ditemukan dalam database.\n\nSilakan masukkan <b>PIN Rahasia</b> Anda.\n\nJika ingin membatalkan:\n/batal`);
       return res.status(200).json({ ok: true });
     }
 
     if (command === '/batal' || command.startsWith('/batal@')) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
-      if (petugas) await supabase.from('master_petugas').update({ mode_input: null }).eq('id', petugas.id);
+      if (petugas) {
+        await supabase.from('master_petugas').update({ mode_input: null }).eq('id', petugas.id);
+        await logAktivitas({
+          jenis_aksi: 'BATAL_PROSES',
+          nrp_saksi: petugas.nrp,
+          nama_saksi: petugas.nama_petugas,
+          kecamatan: petugas.kecamatan,
+          desa: petugas.desa,
+          tps: petugas.tps_aktif,
+          keterangan: `Petugas membatalkan alur perintah`
+        });
+      }
       await removeKeyboard(chatId, `✅ Proses dibatalkan.\nKetik /start untuk kembali.`);
       return res.status(200).json({ ok: true });
     }
@@ -320,11 +419,30 @@ export default async function handler(req, res) {
     if (waitUser) {
       if (text === String(waitUser.pin ?? '').trim()) {
         await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
+
+        await logAktivitas({
+          jenis_aksi: 'REGISTRASI_SUKSES',
+          nrp_saksi: waitUser.nrp,
+          nama_saksi: waitUser.nama_petugas,
+          kecamatan: waitUser.kecamatan,
+          desa: waitUser.desa,
+          keterangan: `Registrasi akun Telegram petugas ${waitUser.nama_petugas} (${waitUser.nrp}) berhasil`
+        });
+
         const msg = `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang,\n<b>${escapeHtml(waitUser.nama_petugas)}</b>\n\n` +
           `📍 Kecamatan : <b>${escapeHtml(waitUser.kecamatan)}</b>\n🏘 Desa : <b>${escapeHtml(waitUser.desa)}</b>\n\n` +
           `Untuk melaporkan hasil penghitungan suara:\n/kirimhasil`;
         await removeKeyboard(chatId, msg);
       } else {
+        await logAktivitas({
+          jenis_aksi: 'REGISTRASI_PIN_SALAH',
+          nrp_saksi: waitUser.nrp,
+          nama_saksi: waitUser.nama_petugas,
+          kecamatan: waitUser.kecamatan,
+          desa: waitUser.desa,
+          keterangan: `PIN salah dimasukkan oleh NRP ${waitUser.nrp}`
+        });
+
         await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
       }
       return res.status(200).json({ ok: true });
@@ -420,6 +538,15 @@ export default async function handler(req, res) {
       const isEditMode = command === '/edithasil';
       await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('id', petugas.id);
 
+      await logAktivitas({
+        jenis_aksi: isEditMode ? 'MODE_EDIT_HASIL' : 'MODE_KIRIM_HASIL',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        keterangan: `Petugas membuka menu ${command}`
+      });
+
       const { data: allTps } = await supabase.from('master_desa').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
       const { data: filledHasil } = await supabase.from('hasil_suara').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa);
 
@@ -443,6 +570,16 @@ export default async function handler(req, res) {
 
     if (command === '/kirimplano') {
       await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('id', petugas.id);
+      
+      await logAktivitas({
+        jenis_aksi: 'MODE_KIRIM_PLANO',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        keterangan: `Petugas membuka menu /kirimplano`
+      });
+
       const { data: allTps } = await supabase.from('master_desa').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
       const keyboard = allTps?.map(t => [{ text: `📍 TPS ${t.tps}` }]);
 
@@ -467,6 +604,16 @@ export default async function handler(req, res) {
       const tpsSelected = text.replace('📍 TPS', '').trim();
       await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('id', petugas.id);
 
+      await logAktivitas({
+        jenis_aksi: 'PILIH_TPS',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: tpsSelected,
+        keterangan: `Petugas memilih TPS ${tpsSelected} (Mode: ${petugas.mode_input || 'KIRIM'})`
+      });
+
       const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsSelected).maybeSingle();
       const jumlahCalon = mDesa?.jumlah_calon || 2;
 
@@ -486,9 +633,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon, dpt').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
+      const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon, total_dpt, dpt').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
       const jumlahCalon = mDesa?.jumlah_calon || 2;
-      const dptLimit = mDesa?.dpt || 9999;
+      const dptLimit = Number(mDesa?.total_dpt ?? mDesa?.dpt ?? 9999);
 
       const parsed = parseVoteInput(text, jumlahCalon);
       if (parsed.error) {
@@ -499,7 +646,7 @@ export default async function handler(req, res) {
       const vote = parsed.result;
 
       if (vote.total > dptLimit) {
-        await sendMessage(chatId, `❌ TOTAL SUARA MELEBIHI DPT. SILAHKAN INPUT KEMBALI`);
+        await sendMessage(chatId, `❌ TOTAL SUARA MELEBIHI DPT (${dptLimit}). SILAHKAN INPUT KEMBALI`);
         return res.status(200).json({ ok: true });
       }
 
@@ -545,18 +692,80 @@ async function handleCallback(cb) {
     const jumlahCalon = mDesa?.jumlah_calon || 2;
     const vote = parseVoteInput(voteText, jumlahCalon).result;
 
-    const { data: existingHasil } = await supabase.from('hasil_suara').select('status_verifikasi, telegram_photo_file_id').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
+    // Ambil data lama untuk pencatatan log audit
+    const { data: existingHasil } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
 
     let statusVerifikasi = 'PLANO BELUM TERUNGGAH';
     if (existingHasil?.telegram_photo_file_id) {
       statusVerifikasi = 'FOTO PLANO BELUM TERVERIFIKASI';
     }
 
-    await supabase.from('hasil_suara').upsert({
-      kecamatan: petugas.kecamatan, desa: petugas.desa, tps: tpsTarget, nrp_saksi: petugas.nrp, nama_saksi: petugas.nama_petugas,
-      suara_calon_01: vote.calon_01, suara_calon_02: vote.calon_02, suara_calon_03: vote.calon_03, suara_calon_04: vote.calon_04, suara_calon_05: vote.calon_05,
-      suara_tidak_sah: vote.tidak_sah, total_suara_masuk: vote.total, status_verifikasi: statusVerifikasi, chat_id_saksi: chatId
-    }, { onConflict: 'kecamatan,desa,tps' });
+    const votePayload = {
+      kecamatan: petugas.kecamatan,
+      desa: petugas.desa,
+      tps: tpsTarget,
+      nrp_saksi: petugas.nrp,
+      nama_saksi: petugas.nama_petugas,
+      suara_calon_01: vote.calon_01,
+      suara_calon_02: vote.calon_02,
+      suara_calon_03: vote.calon_03,
+      suara_calon_04: vote.calon_04,
+      suara_calon_05: vote.calon_05,
+      suara_tidak_sah: vote.tidak_sah,
+      total_suara_masuk: vote.total,
+      input_format: voteText,
+      status_verifikasi: statusVerifikasi,
+      chat_id_saksi: chatId,
+      timestamp: new Date().toISOString()
+    };
+
+    let saveErr = null;
+    if (existingHasil) {
+      const { error } = await supabase.from('hasil_suara').update(votePayload).eq('id', existingHasil.id);
+      saveErr = error;
+    } else {
+      const { error } = await supabase.from('hasil_suara').insert(votePayload);
+      saveErr = error;
+    }
+
+    if (saveErr) {
+      console.error('FAILED TO SAVE VOTE:', saveErr);
+      await sendMessage(chatId, `❌ Gagal menyimpan data: ${saveErr.message}`);
+      return;
+    }
+
+    // Catat ke Log Aktivitas
+    await logAktivitas({
+      jenis_aksi: existingHasil ? 'EDIT_HASIL' : 'KIRIM_HASIL_AWAL',
+      nrp_saksi: petugas.nrp,
+      nama_saksi: petugas.nama_petugas,
+      kecamatan: petugas.kecamatan,
+      desa: petugas.desa,
+      tps: tpsTarget,
+      data_sebelum: existingHasil ? {
+        suara_calon_01: existingHasil.suara_calon_01,
+        suara_calon_02: existingHasil.suara_calon_02,
+        suara_calon_03: existingHasil.suara_calon_03,
+        suara_calon_04: existingHasil.suara_calon_04,
+        suara_calon_05: existingHasil.suara_calon_05,
+        suara_tidak_sah: existingHasil.suara_tidak_sah,
+        total_suara_masuk: existingHasil.total_suara_masuk,
+        status_verifikasi: existingHasil.status_verifikasi
+      } : null,
+      data_sesudah: {
+        suara_calon_01: vote.calon_01,
+        suara_calon_02: vote.calon_02,
+        suara_calon_03: vote.calon_03,
+        suara_calon_04: vote.calon_04,
+        suara_calon_05: vote.calon_05,
+        suara_tidak_sah: vote.tidak_sah,
+        total_suara_masuk: vote.total,
+        status_verifikasi: statusVerifikasi
+      },
+      keterangan: existingHasil
+        ? `Edit perolehan suara TPS ${tpsTarget} oleh ${petugas.nama_petugas}`
+        : `Pengiriman awal hasil suara TPS ${tpsTarget} oleh ${petugas.nama_petugas}`
+    });
 
     const msg = `📊 <b>HASIL SUARA DICATAT</b>\n\n${buildSummaryText(tpsTarget, vote, jumlahCalon)}`;
     const keyboard = { inline_keyboard: [[{ text: 'Kirim Hasil TPS Lain', callback_data: 'NEXT_TPS' }]] };
@@ -566,6 +775,16 @@ async function handleCallback(cb) {
   }
 
   if (data === 'REVISE_VOTE') {
+    await logAktivitas({
+      jenis_aksi: 'REVISI_INPUT_HASIL',
+      nrp_saksi: petugas.nrp,
+      nama_saksi: petugas.nama_petugas,
+      kecamatan: petugas.kecamatan,
+      desa: petugas.desa,
+      tps: petugas.tps_aktif,
+      keterangan: `Petugas memilih merevisi konfirmasi angka hasil suara`
+    });
+
     await editMessage(chatId, cb.message.message_id, `🔄 Silakan masukkan ulang angka hasil suara sesuai format.`);
     return;
   }
@@ -588,7 +807,22 @@ async function handleCallback(cb) {
 
   if (data.startsWith('USE_MANUAL_')) {
     const id = data.replace('USE_MANUAL_', '');
+    const { data: hLama } = await supabase.from('hasil_suara').select('*').eq('id', id).single();
+
     await supabase.from('hasil_suara').update({ status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' }).eq('id', id);
+
+    await logAktivitas({
+      jenis_aksi: 'PILIH_HASIL_MANUAL',
+      nrp_saksi: petugas.nrp,
+      nama_saksi: petugas.nama_petugas,
+      kecamatan: petugas.kecamatan,
+      desa: petugas.desa,
+      tps: hLama?.tps,
+      data_sebelum: { status_verifikasi: hLama?.status_verifikasi },
+      data_sesudah: { status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' },
+      keterangan: `Saksi memilih menggunakan Hasil Input Manual pada TPS ${hLama?.tps}`
+    });
+
     await editMessage(chatId, cb.message.message_id, `✅ Anda memilih menggunakan <b>Hasil Input Manual</b>. Data dimasukkan ke antrean verifikasi Admin.`);
     return;
   }
@@ -598,10 +832,27 @@ async function handleCallback(cb) {
     const { data: h } = await supabase.from('hasil_suara').select('*').eq('id', id).single();
     if (h) {
       const ocrTotal = Number(h.ocr_calon_01 || 0) + Number(h.ocr_calon_02 || 0) + Number(h.ocr_calon_03 || 0) + Number(h.ocr_calon_04 || 0) + Number(h.ocr_calon_05 || 0) + Number(h.ocr_tidak_sah || 0);
+
       await supabase.from('hasil_suara').update({
         suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_calon_03: h.ocr_calon_03, suara_calon_04: h.ocr_calon_04, suara_calon_05: h.ocr_calon_05,
         suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal, status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN'
       }).eq('id', id);
+
+      await logAktivitas({
+        jenis_aksi: 'PILIH_HASIL_PLANO',
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: h.tps,
+        data_sebelum: {
+          suara_calon_01: h.suara_calon_01, suara_calon_02: h.suara_calon_02, suara_tidak_sah: h.suara_tidak_sah, total_suara_masuk: h.total_suara_masuk
+        },
+        data_sesudah: {
+          suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal
+        },
+        keterangan: `Saksi memilih menggunakan Hasil Pembacaan Plano pada TPS ${h.tps}`
+      });
     }
     await editMessage(chatId, cb.message.message_id, `✅ Anda memilih menggunakan <b>Hasil Pembacaan Plano</b>. Data diperbarui dan dimasukkan ke antrean verifikasi Admin.`);
     return;
