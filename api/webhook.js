@@ -135,15 +135,34 @@ async function runOCR(imageBuffer) {
   try {
     console.log('[OCR] Membuat worker Tesseract...');
 
-    worker = await createWorker('eng');
+    worker = await createWorker('eng', 1, {
+      workerPath:
+        'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/worker.min.js',
+
+      corePath:
+        'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0',
+
+      langPath:
+        'https://tessdata.projectnaptha.com/4.0.0',
+
+      cachePath: '/tmp',
+
+      logger: (m) => {
+        if (m?.status) {
+          console.log(
+            `[OCR] ${m.status} ${Math.round((m.progress || 0) * 100)}%`
+          );
+        }
+      }
+    });
+
+    console.log('[OCR] Worker siap. Memulai pembacaan gambar...');
 
     await worker.setParameters({
       tessedit_char_whitelist:
         '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:-/#.',
       preserve_interword_spaces: '1'
     });
-
-    console.log('[OCR] Worker siap. Memulai pembacaan gambar...');
 
     const result = await worker.recognize(imageBuffer);
 
@@ -157,6 +176,18 @@ async function runOCR(imageBuffer) {
     return {
       text,
       confidence
+    };
+
+  } catch (error) {
+    console.error(
+      '[OCR] ERROR:',
+      error?.stack || error?.message || error
+    );
+
+    return {
+      text: '',
+      confidence: 0,
+      error: error?.message || String(error)
     };
 
   } finally {
