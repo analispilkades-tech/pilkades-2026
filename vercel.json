@@ -2,13 +2,8 @@
   "rewrites": [
     { "source": "/", "destination": "/public/index.html" },
     { "source": "/admin", "destination": "/public/admin.html" },
-    { "source": "/login", "destination": "/public/login.html" },
-    { "source": "/api/webhook", "destination": "/api/webhook.js" },
-    { "source": "/api/get-data", "destination": "/api/get-data.js" },
-    { "source": "/api/admin-action", "destination": "/api/admin-action.js" }
-  ]
-}
-{
+    { "source": "/login", "destination": "/public/login.html" }
+  ],
   "functions": {
     "api/webhook.js": {
       "maxDuration": 15
