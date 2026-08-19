@@ -141,32 +141,139 @@ export default async function handler(req, res) {
 }
 
 async function handleInputSuara(chatId, text, petugas, message) {
-  // Logika penerimaan format suara 120#80#40#10 dan foto C1
-  if (text.startsWith('📍')) {
+  // A. JIKA PETUGAS MEMILIH TOMBOL TPS (Contoh: "📍 TPS 01" atau "📍 1")
+  if (text.startsWith('📍') || text.toLowerCase().startsWith('tps')) {
     const tpsSelected = text.replace('📍', '').trim();
+
+    // Simpan TPS pilihan petugas ke database Supabase sementara
+    await supabase
+      .from('master_petugas')
+      .update({ tps_aktif: tpsSelected })
+      .eq('chat_id_telegram', chatId);
+
+    // Ambil jumlah calon dari master_desa untuk memberikan contoh format yang pas
+    const { data: dataDesa } = await supabase
+      .from('master_desa')
+      .select('jumlah_calon')
+      .eq('kecamatan', petugas.kecamatan)
+      .eq('desa', petugas.desa)
+      .maybeSingle();
+
+    const jmlCalon = dataDesa ? dataDesa.jumlah_calon : 3;
+    let formatContoh = [];
+    for (let i = 1; i <= jmlCalon; i++) {
+      formatContoh.push(`[Calon 0${i}]`);
+    }
+    formatContoh.push(`[Tidak Sah]`);
+
     await sendMessage(
       chatId,
-      `Anda memilih <b>${tpsSelected}</b>.\n\n` +
-      `Silakan kirimkan data perolehan suara dengan format:\n` +
-      `<code>[Suara Calon 01]#[Suara Calon 02]#[Suara Calon 03]#[Suara Tidak Sah]</code>\n\n` +
-      `<i>Contoh: 120#80#40#10</i>`
+      `📌 TPS Terpilih: <b>${tpsSelected}</b>\n\n` +
+      `Silakan kirimkan perolehan suara dengan format tanda pagar (#):\n` +
+      `<code>${formatContoh.join('#')}</code>\n\n` +
+      `<i>Contoh untuk ${jmlCalon} calon (${jmlCalon} angka calon + 1 angka tidak sah):</i>\n` +
+      `<code>120#80#40#10</code>`
     );
     return;
   }
 
+  // B. JIKA PETUGAS MENGIRIMKAN ANGKA PEROLEHAN SUARA (Mengandung Tanda #)
   if (text.includes('#')) {
-    const angka = text.split('#').map(a => parseInt(a.trim()) || 0);
-    // Simpan temporary/langsung konfirmasi foto C1
+    const angkaArray = text.split('#').map(a => parseInt(a.trim()) || 0);
+
+    // Ambil TPS yang sedang aktif dari profil petugas
+    const tpsAktif = petugas.tps_aktif || 'TPS 01';
+
+    // Pisahkan angka calon dan suara tidak sah (angka terakhir adalah suara tidak sah)
+    const suaraTidakSah = angkaArray.length > 1 ? angkaArray.pop() : 0;
+    const c01 = angkaArray[0] || 0;
+    const c02 = angkaArray[1] || 0;
+    const c03 = angkaArray[2] || 0;
+    const c04 = angkaArray[3] || 0;
+    const c05 = angkaArray[4] || 0;
+    
+    const totalSuara = c01 + c02 + c03 + c04 + c05 + suaraTidakSah;
+
+    // Simpan atau Perbarui Hasil Suara di Supabase
+    const { error } = await supabase
+      .from('hasil_suara')
+      .upsert({
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: tpsAktif,
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        suara_calon_01: c01,
+        suara_calon_02: c02,
+        suara_calon_03: c03,
+        suara_calon_04: c04,
+        suara_calon_05: c05,
+        suara_tidak_sah: suaraTidakSah,
+        total_suara_masuk: totalSuara,
+        status_verifikasi: 'AUTO_VERIFIED',
+        chat_id_saksi: chatId
+      }, { onConflict: 'kecamatan,desa,tps' });
+
+    if (error) {
+      console.error('Error Upsert Suara:', error);
+      await sendMessage(chatId, `❌ Gagal menyimpan data: ${error.message}`);
+      return;
+    }
+
     await sendMessage(
       chatId,
-      `✅ Perolehan angka dicatat!\n\n` +
-      `Satu langkah lagi: <b>Silakan ambil/upload Foto Lembar C1 Plano</b> dari galeri/kamera HP Anda.`
+      `📊 <b>RINCIAN ANGKA TERCATAT (${tpsAktif})</b>\n\n` +
+      `• Calon 01: <b>${c01}</b>\n` +
+      `• Calon 02: <b>${c02}</b>\n` +
+      `• Calon 03: <b>${c03}</b>\n` +
+      (c04 > 0 ? `• Calon 04: <b>${c04}</b>\n` : '') +
+      (c05 > 0 ? `• Calon 05: <b>${c05}</b>\n` : '') +
+      `• Tidak Sah: <b>${suaraTidakSah}</b>\n` +
+      `-------------------------\n` +
+      `• Total Suara Masuk: <b>${totalSuara}</b>\n\n` +
+      `📸 <b>LANGKAH TERAKHIR:</b>\n` +
+      `Silakan ambil/kirimkan <b>Foto Lembar C1 Plano</b> dari kamera HP Anda.`
     );
     return;
   }
 
+  // C. JIKA PETUGAS MENGIRIM FOTO LEMBAR C1
+  if (message.photo && message.photo.length > 0) {
+    // Ambil file_id foto ukuran terbesar dari Telegram
+    const photoObj = message.photo[message.photo.length - 1];
+    const fileId = photoObj.file_id;
+
+    // Dapatkan URL foto dari Telegram API
+    const resFile = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`);
+    const dataFile = await resFile.json();
+
+    let photoUrl = "";
+    if (dataFile.ok) {
+      photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${dataFile.result.file_path}`;
+    }
+
+    const tpsAktif = petugas.tps_aktif || 'TPS 01';
+
+    // Update URL foto C1 ke Supabase
+    await supabase
+      .from('hasil_suara')
+      .update({ url_foto_c1: photoUrl })
+      .eq('kecamatan', petugas.kecamatan)
+      .eq('desa', petugas.desa)
+      .eq('tps', tpsAktif);
+
+    await sendMessage(
+      chatId,
+      `🎉 <b>PENGIRIMAN DATA SELESAI!</b>\n\n` +
+      `Foto C1 Plano untuk <b>${tpsAktif} Desa ${petugas.desa}</b> berhasil diunggah.\n` +
+      `Data perolehan suara secara otomatis telah masuk ke <b>Live Count Dasbor Publik & Panel Admin</b>.`
+    );
+    return;
+  }
+
+  // PANDUAN DEFAUT JIKA INPUT TIDAK DIKENALI
   await sendMessage(
     chatId,
-    `Halo ${petugas.nama_petugas}, silakan kirim perolehan suara dengan format <code>01#02#03#tidak_sah</code> atau upload foto C1.`
+    `Silakan kirimkan perolehan angka suara dengan format <code>01#02#03#tidak_sah</code> atau upload foto C1 Plano.`
   );
 }
