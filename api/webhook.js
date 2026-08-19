@@ -181,7 +181,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       return;
     }
 
-    // Bandingkan angka manual vs OCR
     let isMatch = true;
     for (let i = 1; i <= jumlahCalon; i++) {
       const key = `calon_${String(i).padStart(2, '0')}`;
@@ -200,7 +199,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
       }).eq('id', dbHasil.id);
 
-      // Kirim Notifikasi Discrepancy (Alur No 10)
       const manualVote = {
         calon_01: dbHasil.suara_calon_01, calon_02: dbHasil.suara_calon_02, calon_03: dbHasil.suara_calon_03, calon_04: dbHasil.suara_calon_04, calon_05: dbHasil.suara_calon_05,
         tidak_sah: dbHasil.suara_tidak_sah, total: dbHasil.total_suara_masuk
@@ -239,7 +237,6 @@ export default async function handler(req, res) {
     const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if (!update) return res.status(200).json({ ok: true });
 
-    // Handle Callback Query (Button Clicks)
     if (update.callback_query) {
       await handleCallback(update.callback_query);
       return res.status(200).json({ ok: true });
@@ -252,13 +249,10 @@ export default async function handler(req, res) {
     const text = message.text ? String(message.text).trim() : '';
     const command = commandOf(text);
 
-    // Cek Akun Terdaftar
     const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
 
-    // 1. ALUR /START
     if (command === '/start' || command.startsWith('/start@')) {
       if (petugas) {
-        // Alur No 2: Sudah Terdaftar
         const msg = `👤 <b>ANDA SUDAH TERDAFTAR</b>\n\n` +
           `Nama : <b>${escapeHtml(petugas.nama_petugas)}</b>\n` +
           `NRP : <code>${escapeHtml(petugas.nrp)}</code>\n` +
@@ -268,7 +262,6 @@ export default async function handler(req, res) {
           `Status : ✅ <b>TERDAFTAR</b>`;
         await sendMessage(chatId, msg);
       } else {
-        // Alur No 1: Belum Terdaftar
         const msg = `🇮🇩 <b>SELAMAT DATANG</b>\n\nBot Penghitungan Cepat Pilkades\nKabupaten Wonosobo Tahun 2026\n\n` +
           `Untuk melakukan registrasi petugas, ketik:\n\n<code>/reg NRP</code>\n\nContoh:\n<code>/reg 12345678</code>`;
         await sendMessage(chatId, msg);
@@ -276,13 +269,13 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // 2. ALUR /HELP
     if (command === '/help' || command.startsWith('/help@')) {
       const msg = `📋 <b>DAFTAR PERINTAH BOT</b>\n\n` +
         `<code>/start</code> - Menu utama & status\n` +
         `<code>/reg NRP</code> - Pendaftaran petugas\n` +
         `<code>/kirimhasil</code> - Kirim hasil penghitungan suara\n` +
         `<code>/edithasil</code> - Edit hasil suara yang sudah masuk\n` +
+        `<code>/lihathasil</code> - Lihat rekapitulasi hasil suara desa\n` +
         `<code>/kirimplano</code> - Upload foto C1 Plano\n` +
         `<code>/status</code> - Cek rincian status TPS\n` +
         `<code>/batal</code> - Batal proses\n` +
@@ -291,7 +284,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ALUR REGISTRASI (/REG) DAN PIN
     if (command === '/reg' || command.startsWith('/reg@')) {
       if (petugas) {
         await sendMessage(chatId, `👤 <b>ANDA SUDAH TERDAFTAR</b>\n\nNama : ${escapeHtml(petugas.nama_petugas)}\nNRP : ${escapeHtml(petugas.nrp)}`);
@@ -317,7 +309,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ALUR /BATAL
     if (command === '/batal' || command.startsWith('/batal@')) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
       if (petugas) await supabase.from('master_petugas').update({ mode_input: null }).eq('id', petugas.id);
@@ -325,7 +316,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // PENGECEKAN USER WAIT PIN
     const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
     if (waitUser) {
       if (text === String(waitUser.pin ?? '').trim()) {
@@ -340,13 +330,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // PEMBATASAN: User Belum Terdaftar Hanya Boleh Access /start & /help (Alur No 11)
     if (!petugas) {
       await sendMessage(chatId, `🔐 <b>ANDA BELUM TERDAFTAR</b>\n\nSilakan registrasi terlebih dahulu:\n<code>/reg NRP</code>\n\nAtau ketik /help untuk panduan.`);
       return res.status(200).json({ ok: true });
     }
 
-    // 3. ALUR /STATUS (Alur No 11)
     if (command === '/status' || command.startsWith('/status@')) {
       const { data: allTps } = await supabase.from('master_desa').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
       const { data: allHasil } = await supabase.from('hasil_suara').select('tps, status_verifikasi').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa);
@@ -372,7 +360,62 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // 4. ALUR /KIRIMHASIL ATAU /EDITHASIL (Alur No 4, 6, 7)
+    /* =========================================================
+       PERINTAH /LIHATHASIL
+    ========================================================= */
+    if (command === '/lihathasil' || command.startsWith('/lihathasil@')) {
+      const { data: allTps } = await supabase
+        .from('master_desa')
+        .select('tps, jumlah_calon')
+        .eq('kecamatan', petugas.kecamatan)
+        .eq('desa', petugas.desa)
+        .order('tps');
+
+      const { data: allHasil } = await supabase
+        .from('hasil_suara')
+        .select('*')
+        .eq('kecamatan', petugas.kecamatan)
+        .eq('desa', petugas.desa);
+
+      const statusMap = {};
+      allHasil?.forEach(h => { statusMap[h.tps] = h; });
+
+      const jumlahCalon = allTps?.[0]?.jumlah_calon || 2;
+      const tpsList = allTps?.map(t => t.tps) || [];
+
+      let header = 'Calon      | ' + tpsList.map(t => `TPS ${t}`).join(' | ');
+      let separator = '='.repeat(Math.max(25, header.length));
+
+      let bodyRows = [];
+      for (let i = 1; i <= jumlahCalon; i++) {
+        const numStr = String(i).padStart(2, '0');
+        const key = `suara_calon_${numStr}`;
+        let vals = tpsList.map(t => {
+          const h = statusMap[t];
+          return h && h[key] !== null && h[key] !== undefined ? h[key] : '-';
+        });
+        bodyRows.push(`Calon ${numStr}   | ` + vals.join('     | '));
+      }
+
+      let tsVals = tpsList.map(t => {
+        const h = statusMap[t];
+        return h && h.suara_tidak_sah !== null && h.suara_tidak_sah !== undefined ? h.suara_tidak_sah : '-';
+      });
+      let tsRow = `Tidak sah  | ` + tsVals.join('     | ');
+
+      let totVals = tpsList.map(t => {
+        const h = statusMap[t];
+        return h && h.total_suara_masuk !== null && h.total_suara_masuk !== undefined ? h.total_suara_masuk : '-';
+      });
+      let totRow = `TOTAL      | ` + totVals.join('     | ');
+
+      let tableText = `${header}\n${separator}\n${bodyRows.join('\n')}\n\n${tsRow}\n${separator}\n${totRow}`;
+      const msg = `📊<b>HASIL SUARA DICATAT DESA ${escapeHtml(petugas.desa).toUpperCase()}</b>\n\n<pre>${tableText}</pre>`;
+
+      await sendMessage(chatId, msg);
+      return res.status(200).json({ ok: true });
+    }
+
     if (command === '/kirimhasil' || command === '/edithasil') {
       const isEditMode = command === '/edithasil';
       await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('id', petugas.id);
@@ -382,13 +425,11 @@ export default async function handler(req, res) {
 
       const filledSet = new Set(filledHasil?.map(h => h.tps));
 
-      // Jika /kirimhasil dan seluruh TPS terisi
       if (!isEditMode && allTps && allTps.every(t => filledSet.has(t.tps))) {
         await sendMessage(chatId, `SELURUH TPS SUDAH TERISI DATA. UNTUK EDIT DATA kirim /edithasil`);
         return res.status(200).json({ ok: true });
       }
 
-      // Filter TPS untuk keyboard
       const availableTps = isEditMode ? allTps : allTps.filter(t => !filledSet.has(t.tps));
       const keyboard = availableTps.map(t => [{ text: `📍 TPS ${t.tps}` }]);
 
@@ -400,7 +441,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ALUR /KIRIMPLANO
     if (command === '/kirimplano') {
       await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('id', petugas.id);
       const { data: allTps } = await supabase.from('master_desa').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
@@ -410,7 +450,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // FOTO PLANO DITERIMA
     if (Array.isArray(message.photo) && message.photo.length > 0) {
       if (!petugas.tps_aktif) {
         await sendMessage(chatId, `⚠️ TPS belum dipilih. Ketik /kirimplano atau /kirimhasil terlebih dahulu.`);
@@ -420,12 +459,10 @@ export default async function handler(req, res) {
       const largestPhoto = message.photo[message.photo.length - 1];
       await sendMessage(chatId, `📷 Foto C1 Plano TPS ${petugas.tps_aktif} diterima dan sedang diproses di latar belakang.`);
       
-      // Jalankan OCR di Latar Belakang (Alur No 8)
       waitUntil(processPlanoPhotoInBackground(chatId, petugas.tps_aktif, largestPhoto.file_id, petugas));
       return res.status(200).json({ ok: true });
     }
 
-    // SELEKSI TPS VIA KEYBOARD
     if (text.startsWith('📍 TPS')) {
       const tpsSelected = text.replace('📍 TPS', '').trim();
       await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('id', petugas.id);
@@ -442,7 +479,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // INPUT HASIL SUARA (FORMAT ANGKA #)
     if (text.includes('#')) {
       const tpsTarget = petugas.tps_aktif;
       if (!tpsTarget) {
@@ -462,16 +498,10 @@ export default async function handler(req, res) {
 
       const vote = parsed.result;
 
-      // VALIDASI DPT (Alur No 5)
       if (vote.total > dptLimit) {
         await sendMessage(chatId, `❌ TOTAL SUARA MELEBIHI DPT. SILAHKAN INPUT KEMBALI`);
         return res.status(200).json({ ok: true });
       }
-
-      // SIMPAN DRAF TEMPORARY DI USER_STATE SEMENTARA
-      const tempPayload = {
-        vote, tpsTarget, isEdit: petugas.mode_input === 'EDIT'
-      };
 
       const keyboard = {
         inline_keyboard: [
@@ -485,7 +515,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // DEFAULT UNKNOWN
     await sendMessage(chatId, `ℹ️ Perintah tidak dikenali. Ketik /help untuk daftar menu.`);
     return res.status(200).json({ ok: true });
 
@@ -507,7 +536,6 @@ async function handleCallback(cb) {
   const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
   if (!petugas) return;
 
-  // KONFIRMASI SIMPAN SUARA (BENAR DAN KIRIM)
   if (data.startsWith('CONFIRM_VOTE_')) {
     const parts = data.split('_');
     const tpsTarget = parts[2];
@@ -519,7 +547,6 @@ async function handleCallback(cb) {
 
     const { data: existingHasil } = await supabase.from('hasil_suara').select('status_verifikasi, telegram_photo_file_id').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
 
-    // Tentukan Status Verifikasi (Alur No 9)
     let statusVerifikasi = 'PLANO BELUM TERUNGGAH';
     if (existingHasil?.telegram_photo_file_id) {
       statusVerifikasi = 'FOTO PLANO BELUM TERVERIFIKASI';
@@ -559,7 +586,6 @@ async function handleCallback(cb) {
     return;
   }
 
-  // DISCREPANCY SELECTION (Alur No 10)
   if (data.startsWith('USE_MANUAL_')) {
     const id = data.replace('USE_MANUAL_', '');
     await supabase.from('hasil_suara').update({ status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' }).eq('id', id);
