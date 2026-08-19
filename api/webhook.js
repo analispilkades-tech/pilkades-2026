@@ -193,12 +193,11 @@ function buildSummaryText(tps, voteObj, jumlahCalon) {
 }
 
 /* =========================================================
-   PROSES FOTO PLANO DI LATAR BELAKANG (DIPERBAIKI)
+   PROSES FOTO PLANO DI LATAR BELAKANG
 ========================================================= */
 
 async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas) {
   try {
-    // 1. LANGSUNG UPDATE DATABASE DI AWAL AGAR STATUS INSTAN BERUBAH
     const { data: dbHasilAwal } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
     
     if (!dbHasilAwal) {
@@ -218,7 +217,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       }).eq('id', dbHasilAwal.id);
     }
 
-    // 2. DOWNLOAD FILE DARI TELEGRAM
     const imageBuffer = await downloadTelegramFile(fileId);
     
     const cleanKec = String(petugas.kecamatan || 'kec').toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -226,7 +224,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     const cleanTps = String(tpsTarget || '1').toLowerCase().replace(/[^a-z0-9]/g, '_');
     const customFileName = `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;
 
-    // 3. KIRIM KE GOOGLE DRIVE (GAS AKAN TIMPA FILE LAMA JIKA NAMA SAMA)
     let googleDriveUrl = null;
     if (GDRIVE_WEBHOOK_URL) {
       try {
@@ -254,7 +251,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       }).eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget);
     }
 
-    // 4. JALANKAN OCR SECARA AMAN
     let ocrText = '';
     try {
       const ocr = await runOCR(imageBuffer);
@@ -669,7 +665,7 @@ export default async function handler(req, res) {
 
       const largestPhoto = message.photo[message.photo.length - 1];
 
-      // Cek apakah foto plano untuk TPS ini sudah pernah diunggah sebelumnya (berdasarkan status atau file ID)
+      // Cek apakah foto plano untuk TPS ini sudah pernah diunggah sebelumnya
       const { data: cekHasil } = await supabase
         .from('hasil_suara')
         .select('*')
@@ -679,10 +675,13 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (cekHasil && (cekHasil.telegram_photo_file_id || cekHasil.status_verifikasi !== 'PLANO BELUM TERUNGGAH')) {
+        // [PEMBENAHAN] Simpan file_id ke mode_input sementara untuk menghindari batasan 64 byte Telegram callback_data
+        await supabase.from('master_petugas').update({ mode_input: `PLANO_PENDING_${largestPhoto.file_id}` }).eq('nrp', petugas.nrp);
+
         const keyboard = {
           inline_keyboard: [
-            [{ text: '⚠️ YA, TIMPA / REPLACE FOTO', callback_data: `REPLACE_PLANO_${petugas.tps_aktif}_${largestPhoto.file_id}` }],
-            [{ text: '❌ BATAL', callback_data: 'CANCEL_PLANO' }]
+            [{ text: '⚠️ YA, TIMPA / REPLACE FOTO', callback_data: 'REPLACE_PLANO_YES' }],
+            [{ text: '❌ BATAL', callback_data: 'REPLACE_PLANO_NO' }]
           ]
         };
         await sendMessage(chatId, `⚠️ <b>PERHATIAN</b>\n\nFoto C1 Plano untuk <b>TPS ${petugas.tps_aktif}</b> sudah pernah diunggah sebelumnya.\nApakah Anda ingin mengganti/menimpa foto lama dengan yang baru?`, keyboard);
@@ -777,17 +776,22 @@ async function handleCallback(cb) {
   const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
   if (!petugas) return;
 
-  if (data.startsWith('REPLACE_PLANO_')) {
-    const parts = data.split('_');
-    const tpsTarget = parts[2];
-    const fileId = parts[3];
+  if (data === 'REPLACE_PLANO_YES') {
+    if (!petugas.mode_input || !petugas.mode_input.startsWith('PLANO_PENDING_')) {
+      await editMessage(chatId, cb.message.message_id, `❌ Sesi unggah foto kedaluwarsa atau tidak valid. Silakan kirim ulang foto.`);
+      return;
+    }
 
-    await editMessage(chatId, cb.message.message_id, `🔄 Mengganti foto C1 Plano TPS ${tpsTarget} dengan yang baru...`);
-    waitUntil(processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas));
+    const fileId = petugas.mode_input.replace('PLANO_PENDING_', '');
+    await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('nrp', petugas.nrp);
+
+    await editMessage(chatId, cb.message.message_id, `🔄 Mengganti foto C1 Plano TPS ${petugas.tps_aktif} dengan yang baru...`);
+    waitUntil(processPlanoPhotoInBackground(chatId, petugas.tps_aktif, fileId, petugas));
     return;
   }
 
-  if (data === 'CANCEL_PLANO') {
+  if (data === 'REPLACE_PLANO_NO') {
+    await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('nrp', petugas.nrp);
     await editMessage(chatId, cb.message.message_id, `❌ Unggah foto plano dibatalkan.`);
     return;
   }
