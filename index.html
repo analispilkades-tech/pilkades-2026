@@ -331,4 +331,33 @@
     loadLiveData();
   </script>
 </body>
+
+  <!-- FOOTER CONTAINER: Running Log Activity & Copyright -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-4 py-2.5 z-50">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
+      
+      <!-- Label Kiri & Ticker Log -->
+      <div class="flex items-center space-x-2 w-full md:w-auto overflow-hidden">
+        <div class="flex items-center space-x-1.5 bg-blue-950 text-blue-400 border border-blue-800 px-2.5 py-0.5 rounded text-xs font-bold shrink-0">
+          <span class="animate-pulse">⚡</span>
+          <span>LOG:</span>
+        </div>
+
+        <!-- Box Teks Berjalan Vertical -->
+        <div class="relative h-5 overflow-hidden flex-grow md:w-96">
+          <div id="logTicker" class="absolute w-full h-full flex items-center text-xs font-medium text-emerald-300">
+            <span class="text-slate-500">Menunggu kiriman data terbaru dari TPS...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kanan: Copyright & Jam Digital -->
+      <div class="flex items-center space-x-4 text-xs text-slate-500 shrink-0">
+        <span>&copy; 2026 brengos ntd. All Rights Reserved.</span>
+        <span class="hidden md:inline">|</span>
+        <span id="clockText" class="font-mono hidden md:inline">00:00:00 WIB</span>
+      </div>
+
+    </div>
+  </footer>
 </html>
