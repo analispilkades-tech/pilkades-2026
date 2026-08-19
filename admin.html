@@ -164,5 +164,32 @@
     // Load data awal
     loadAuditData();
   </script>
+  <!-- Tambahkan di dalam file admin.html -->
+<script>
+  // Cek apakah pengguna sudah memiliki token login di browser
+  const token = localStorage.getItem("adminToken");
+  if (!token) {
+    // Jika tidak ada token, paksa pindah ke halaman login
+    window.location.href = "/login";
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminNama");
+    window.location.href = "/login";
+  }
+</script>
+
+<!-- Tambahkan Tombol Logout di Header admin.html -->
+<div class="flex items-center space-x-3">
+  <span class="text-xs text-slate-300">Logged as: <strong id="userDisplay"></strong></span>
+  <button onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded font-bold">
+    Keluar (Logout)
+  </button>
+</div>
+
+<script>
+  document.getElementById("userDisplay").innerText = localStorage.getItem("adminNama") || "Admin";
+</script>
 </body>
 </html>
