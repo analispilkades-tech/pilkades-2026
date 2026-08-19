@@ -126,14 +126,12 @@
   <footer class="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-4 py-2.5 z-50">
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
       
-      <!-- Label Kiri & Ticker Log Ringkasi -->
       <div class="flex items-center space-x-2 w-full md:w-auto overflow-hidden">
         <div class="flex items-center space-x-1.5 bg-blue-950 text-blue-400 border border-blue-800 px-2.5 py-0.5 rounded text-xs font-bold shrink-0">
           <span class="animate-pulse">⚡</span>
           <span>LOG:</span>
         </div>
 
-        <!-- Box Teks Berjalan Vertical -->
         <div class="relative h-5 overflow-hidden flex-grow md:w-[28rem]">
           <div id="logTicker" class="absolute w-full h-full flex items-center text-xs font-medium text-emerald-300 truncate">
             <span class="text-slate-500">Menunggu kiriman data terbaru dari TPS...</span>
@@ -141,7 +139,6 @@
         </div>
       </div>
 
-      <!-- Kanan: Copyright & Jam Digital -->
       <div class="flex items-center space-x-4 text-xs text-slate-500 shrink-0">
         <span>&copy; 2026 brengos ntd. All Rights Reserved.</span>
         <span class="hidden md:inline">|</span>
@@ -155,6 +152,7 @@
     const API_URL = "/api/get-data";
     
     let rawData = [];
+    let globalTotalTpsMaster = 0;
     let logIndex = 0;
     let logList = [];
 
@@ -163,6 +161,7 @@
         const response = await fetch(API_URL);
         const result = await response.json();
         
+        globalTotalTpsMaster = Number(result.total_tps || 0);
         const data = result.data || result || [];
         rawData = Array.isArray(data) ? data.filter(d => d.status_verifikasi !== 'REJECTED') : [];
         
@@ -214,9 +213,9 @@
     }
 
     function renderDashboardStats(data) {
-      const totalTPSDiperkirakan = 750;
+      const totalTPSDiperkirakan = globalTotalTpsMaster || data.length || 0;
       const tpsMasuk = data.length;
-      const tpsPercent = ((tpsMasuk / totalTPSDiperkirakan) * 100).toFixed(1);
+      const tpsPercent = totalTPSDiperkirakan > 0 ? ((tpsMasuk / totalTPSDiperkirakan) * 100).toFixed(1) : 0;
 
       let totalSuaraMasuk = 0;
       data.forEach(item => {
@@ -235,27 +234,41 @@
 
       let totalSuaraMasuk = 0;
       let calonSuara = [0, 0, 0, 0, 0];
+      let maxCalonDiFilter = 2;
 
       data.forEach(item => {
+        const jml = Number(item.jumlah_calon || 2);
+        if (jml > maxCalonDiFilter) maxCalonDiFilter = jml;
+
         totalSuaraMasuk += Number(item.total_suara_masuk || 0);
-        calonSuara[0] += Number(item.suara_calon_01 || 0);
-        calonSuara[1] += Number(item.suara_calon_02 || 0);
-        calonSuara[2] += Number(item.suara_calon_03 || 0);
-        calonSuara[3] += Number(item.suara_calon_04 || 0);
-        calonSuara[4] += Number(item.suara_calon_05 || 0);
+        if (jml >= 1) calonSuara[0] += Number(item.suara_calon_01 || 0);
+        if (jml >= 2) calonSuara[1] += Number(item.suara_calon_02 || 0);
+        if (jml >= 3) calonSuara[2] += Number(item.suara_calon_03 || 0);
+        if (jml >= 4) calonSuara[3] += Number(item.suara_calon_04 || 0);
+        if (jml >= 5) calonSuara[4] += Number(item.suara_calon_05 || 0);
       });
 
       const colors = ['text-indigo-400', 'text-amber-400', 'text-emerald-400', 'text-rose-400', 'text-purple-400'];
 
       for (let i = 0; i < 5; i++) {
-        const suara = calonSuara[i];
-        const percent = totalSuaraMasuk > 0 ? ((suara / totalSuaraMasuk) * 100).toFixed(1) : 0;
+        const candidateNum = i + 1;
+        const exists = candidateNum <= maxCalonDiFilter;
+        
+        let percentText = "-";
+        let voteText = "-";
+
+        if (exists) {
+          const suara = calonSuara[i];
+          const percent = totalSuaraMasuk > 0 ? ((suara / totalSuaraMasuk) * 100).toFixed(1) : "0.0";
+          percentText = `${percent}%`;
+          voteText = `${suara.toLocaleString('id-ID')} Suara`;
+        }
 
         container.innerHTML += `
           <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md">
-            <div class="text-slate-400 text-xs font-semibold uppercase">Calon 0${i + 1}</div>
-            <div class="text-2xl font-extrabold ${colors[i]} mt-1">${percent}%</div>
-            <span class="text-xs text-slate-400 block mt-1">${suara.toLocaleString('id-ID')} Suara</span>
+            <div class="text-slate-400 text-xs font-semibold uppercase">Calon 0${candidateNum}</div>
+            <div class="text-2xl font-extrabold ${colors[i]} mt-1">${percentText}</div>
+            <span class="text-xs text-slate-400 block mt-1">${voteText}</span>
           </div>
         `;
       }
@@ -271,17 +284,25 @@
       }
 
       data.forEach(item => {
+        const jml = Number(item.jumlah_calon || 2);
+
+        const c1 = item.suara_calon_01 !== null && item.suara_calon_01 !== undefined ? item.suara_calon_01 : 0;
+        const c2 = item.suara_calon_02 !== null && item.suara_calon_02 !== undefined ? item.suara_calon_02 : 0;
+        const c3 = jml >= 3 ? (item.suara_calon_03 !== null && item.suara_calon_03 !== undefined ? item.suara_calon_03 : 0) : '-';
+        const c4 = jml >= 4 ? (item.suara_calon_04 !== null && item.suara_calon_04 !== undefined ? item.suara_calon_04 : 0) : '-';
+        const c5 = jml >= 5 ? (item.suara_calon_05 !== null && item.suara_calon_05 !== undefined ? item.suara_calon_05 : 0) : '-';
+
         tbody.innerHTML += `
           <tr class="hover:bg-slate-700/30 transition">
             <td class="p-3">${item.kecamatan || '-'}</td>
             <td class="p-3 font-semibold text-white">${item.desa || '-'}</td>
             <td class="p-3 font-bold text-blue-400">${item.tps || '-'}</td>
             <td class="p-3">${item.nama_saksi || '-'} <span class="text-slate-500 text-xs">(${item.nrp_saksi || '-'})</span></td>
-            <td class="p-3 text-center font-bold text-indigo-400">${item.suara_calon_01 || 0}</td>
-            <td class="p-3 text-center font-bold text-amber-400">${item.suara_calon_02 || 0}</td>
-            <td class="p-3 text-center font-bold text-emerald-400">${item.suara_calon_03 || 0}</td>
-            <td class="p-3 text-center font-bold text-rose-400">${item.suara_calon_04 || 0}</td>
-            <td class="p-3 text-center font-bold text-purple-400">${item.suara_calon_05 || 0}</td>
+            <td class="p-3 text-center font-bold text-indigo-400">${c1}</td>
+            <td class="p-3 text-center font-bold text-amber-400">${c2}</td>
+            <td class="p-3 text-center font-bold text-emerald-400">${c3}</td>
+            <td class="p-3 text-center font-bold text-rose-400">${c4}</td>
+            <td class="p-3 text-center font-bold text-purple-400">${c5}</td>
             <td class="p-3 text-center text-slate-400">${item.suara_tidak_sah || 0}</td>
             <td class="p-3 text-center font-extrabold text-white">${item.total_suara_masuk || 0}</td>
             <td class="p-3 text-center">
@@ -294,7 +315,6 @@
       });
     }
 
-    // LOGIKA UPDATE LOG RUNNING TICKER (Format Ringkas & Usia Data < 5 Menit)
     function updateLogList(data) {
       if (!data || data.length === 0) {
         logList = ["Belum ada data masuk dari TPS."];
@@ -304,14 +324,12 @@
       const now = new Date().getTime();
       const FIVE_MINUTES = 5 * 60 * 1000;
 
-      // Filter data rekam dengan timestamp kurang dari 5 menit terakhir
       let recentData = data.filter(item => {
         if (!item.timestamp) return false;
         const itemTime = new Date(item.timestamp).getTime();
         return (now - itemTime) < FIVE_MINUTES;
       });
 
-      // Jika tidak ada data dalam 5 menit terakhir, ambil 5 data teratas paling baru
       if (recentData.length === 0) {
         const sorted = [...data].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
         recentData = sorted.slice(0, 5);
@@ -329,7 +347,7 @@
       const currentLog = logList[logIndex];
       
       tickerContainer.classList.remove("animate-log-item");
-      void tickerContainer.offsetWidth; // Trigger reflow animasi
+      void tickerContainer.offsetWidth;
       tickerContainer.innerHTML = currentLog;
       tickerContainer.classList.add("animate-log-item");
 
