@@ -964,7 +964,12 @@ if (ocrUpdateError) {
     ) {
       isMatch = false;
     }
-
+if (
+  Number(dbHasilTerbaru.total_suara_masuk || 0) !==
+  Number(ocrRes.total || 0)
+) {
+  isMatch = false;
+}
     /*
      * =========================================================
      * 13. AUTO VERIFIED
