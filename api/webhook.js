@@ -27,20 +27,19 @@ async function sendMessage(chatId, text, replyMarkup = null) {
 }
 
 export default async function handler(req, res) {
-  // Selalu beri tahu Telegram bahwa request sudah diterima dengan cepat
   if (req.method !== 'POST') return res.status(200).send('OK');
 
-  const update = req.body;
-  if (!update || !update.message) return res.status(200).send('OK');
-
-  // Kirim HTTP 200 OK ke Telegram sesegera mungkin agar Telegram tidak melakukan retry request
+  // Langsung beri respon 200 OK ke Telegram agar HTTP request tidak menggantung
   res.status(200).json({ ok: true });
+
+  const update = req.body;
+  if (!update || !update.message) return;
 
   const chatId = String(update.message.chat.id);
   const text = update.message.text ? update.message.text.trim() : '';
 
   try {
-    // 1. COMMAND /start
+    // 1. RESPONS LANGSUNG UNTUK COMMAND /start
     if (text === '/start') {
       await sendMessage(
         chatId,
@@ -78,6 +77,7 @@ export default async function handler(req, res) {
         return;
       }
 
+      // Tandai temporary status WAIT_PIN
       await supabase
         .from('master_petugas')
         .update({ tps_aktif: `WAIT_PIN_${nrpInput}` })
@@ -91,14 +91,14 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Ambil profil petugas terdaftar
+    // Ambil profil petugas jika sudah terdaftar
     const { data: petugasLogin } = await supabase
       .from('master_petugas')
       .select('*')
       .eq('chat_id_telegram', chatId)
       .maybeSingle();
 
-    // 3. VERIFIKASI PIN
+    // 3. PROSES VERIFIKASI PIN
     if (!petugasLogin) {
       const { data: petugasWaitPin } = await supabase
         .from('master_petugas')
@@ -180,7 +180,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    // 6. INPUT ANGKA SUARA (#)
+    // 6. INPUT PEROLEHAN ANGKA SUARA (#)
     if (text.includes('#')) {
       const rawArray = text.split('#').map(a => parseInt(a.trim()) || 0);
       const tpsTarget = petugasLogin.tps_aktif || 'TPS 01';
@@ -233,7 +233,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    // 7. INPUT FOTO C1
+    // 7. INPUT FOTO C1 PLANO
     if (update.message.photo && update.message.photo.length > 0) {
       const photoObj = update.message.photo[update.message.photo.length - 1];
       const resInfo = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${photoObj.file_id}`);
