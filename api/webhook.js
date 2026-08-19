@@ -675,8 +675,10 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (cekHasil && (cekHasil.telegram_photo_file_id || cekHasil.status_verifikasi !== 'PLANO BELUM TERUNGGAH')) {
-        // [PEMBENAHAN] Simpan file_id ke mode_input sementara untuk menghindari batasan 64 byte Telegram callback_data
-        await supabase.from('master_petugas').update({ mode_input: `PLANO_PENDING_${largestPhoto.file_id}` }).eq('nrp', petugas.nrp);
+        // [PEMBENAHAN] Simpan file_id ke catatan_verifikasi di tabel hasil_suara agar tidak ada batasan panjang karakter
+        await supabase.from('hasil_suara').update({
+          catatan_verifikasi: `PENDING_REPLACE_${largestPhoto.file_id}`
+        }).eq('id', cekHasil.id);
 
         const keyboard = {
           inline_keyboard: [
@@ -777,13 +779,23 @@ async function handleCallback(cb) {
   if (!petugas) return;
 
   if (data === 'REPLACE_PLANO_YES') {
-    if (!petugas.mode_input || !petugas.mode_input.startsWith('PLANO_PENDING_')) {
+    const { data: cekHasil } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('kecamatan', petugas.kecamatan)
+      .eq('desa', petugas.desa)
+      .eq('tps', petugas.tps_aktif)
+      .maybeSingle();
+
+    if (!cekHasil || !cekHasil.catatan_verifikasi || !cekHasil.catatan_verifikasi.startsWith('PENDING_REPLACE_')) {
       await editMessage(chatId, cb.message.message_id, `❌ Sesi unggah foto kedaluwarsa atau tidak valid. Silakan kirim ulang foto.`);
       return;
     }
 
-    const fileId = petugas.mode_input.replace('PLANO_PENDING_', '');
-    await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('nrp', petugas.nrp);
+    const fileId = cekHasil.catatan_verifikasi.replace('PENDING_REPLACE_', '');
+    
+    // Bersihkan catatan verifikasi sementara
+    await supabase.from('hasil_suara').update({ catatan_verifikasi: null }).eq('id', cekHasil.id);
 
     await editMessage(chatId, cb.message.message_id, `🔄 Mengganti foto C1 Plano TPS ${petugas.tps_aktif} dengan yang baru...`);
     waitUntil(processPlanoPhotoInBackground(chatId, petugas.tps_aktif, fileId, petugas));
@@ -791,7 +803,18 @@ async function handleCallback(cb) {
   }
 
   if (data === 'REPLACE_PLANO_NO') {
-    await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('nrp', petugas.nrp);
+    const { data: cekHasil } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('kecamatan', petugas.kecamatan)
+      .eq('desa', petugas.desa)
+      .eq('tps', petugas.tps_aktif)
+      .maybeSingle();
+
+    if (cekHasil) {
+      await supabase.from('hasil_suara').update({ catatan_verifikasi: null }).eq('id', cekHasil.id);
+    }
+
     await editMessage(chatId, cb.message.message_id, `❌ Unggah foto plano dibatalkan.`);
     return;
   }
