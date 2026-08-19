@@ -124,31 +124,52 @@ async function logAktivitas({
 }
 
 /* =========================================================
-   OCR BACKGROUND PROCESS (TESSERACT.JS) - FINAL FIX
+   OCR ENGINE - TESSERACT.JS
+   OCR dijalankan sebagai proses background.
+   Tidak boleh menghambat penyimpanan Live Count.
 ========================================================= */
 
 async function runOCR(imageBuffer) {
   let worker = null;
+
   try {
-    let coreVersion = null;
-    try { coreVersion = require('tesseract.js-core/package.json').version; } catch (e) {}
-    
-    worker = await createWorker('eng', 1, {
-      workerPath: require.resolve('tesseract.js/dist/worker.min.js'), // Menggunakan jalur absolut lokal yang aman untuk Node.js
-      corePath: coreVersion ? `https://cdn.jsdelivr.net/npm/tesseract.js-core@${coreVersion}` : 'https://cdn.jsdelivr.net/npm/tesseract.js-core',
-      langPath: 'https://tessdata.projectnaptha.com/4.00',
-      cachePath: '/tmp'
-    });
+    console.log('[OCR] Membuat worker Tesseract...');
+
+    worker = await createWorker('eng');
 
     await worker.setParameters({
-      tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:-/#.',
+      tessedit_char_whitelist:
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:-/#.',
       preserve_interword_spaces: '1'
     });
 
+    console.log('[OCR] Worker siap. Memulai pembacaan gambar...');
+
     const result = await worker.recognize(imageBuffer);
-    return { text: result?.data?.text || '', confidence: Number(result?.data?.confidence || 0) };
+
+    const text = result?.data?.text || '';
+    const confidence = Number(result?.data?.confidence || 0);
+
+    console.log('[OCR] Selesai.');
+    console.log('[OCR] Confidence:', confidence);
+    console.log('[OCR] Text:', text);
+
+    return {
+      text,
+      confidence
+    };
+
   } finally {
-    if (worker) await worker.terminate();
+    if (worker) {
+      try {
+        await worker.terminate();
+      } catch (terminateError) {
+        console.error(
+          '[OCR] Gagal terminate worker:',
+          terminateError?.message || terminateError
+        );
+      }
+    }
   }
 }
 
