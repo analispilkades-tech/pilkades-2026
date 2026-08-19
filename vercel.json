@@ -8,10 +8,7 @@
   "functions": {
     "api/webhook.js": {
       "maxDuration": 15,
-      "includeFiles": [
-        "node_modules/tesseract.js-core/*.wasm",
-        "node_modules/tesseract.js-core/*.wasm.js"
-      ]
+      "includeFiles": "node_modules/tesseract.js-core/**"
     }
   }
 }
