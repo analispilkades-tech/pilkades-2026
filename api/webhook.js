@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { createWorker } from 'tesseract.js';
 import { waitUntil } from '@vercel/functions';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -201,13 +204,81 @@ async function downloadTelegramFile(filePath) {
    TESSERACT.JS OCR — GRATIS / TANPA API KEY
 ========================================================= */
 
+/*
+  PENTING (Vercel / serverless):
+
+  File .wasm milik tesseract.js-core TIDAK ikut ter-bundle
+  oleh proses build Vercel (dikecualikan secara otomatis).
+  Kalau kita biarkan default (ambil file lokal dari
+  node_modules), maka OCR akan SELALU gagal di production
+  dengan error semacam:
+
+    ENOENT: tesseract-core-relaxedsimd.wasm
+
+  Solusi: paksa Tesseract.js mengambil file core-nya dari
+  CDN (jsDelivr) alih-alih dari node_modules lokal.
+  Versi core diambil otomatis dari package.json
+  tesseract.js-core yang terpasang, supaya selalu cocok
+  dengan versi tesseract.js yang dipakai.
+
+  cachePath diarahkan ke /tmp karena itu satu-satunya
+  folder yang bisa ditulis oleh Vercel Functions saat
+  runtime (selain /tmp, filesystem bersifat read-only).
+*/
+
+let cachedCoreVersion = null;
+
+function getTesseractCoreVersion() {
+
+  if (cachedCoreVersion) {
+    return cachedCoreVersion;
+  }
+
+  try {
+    cachedCoreVersion =
+      require('tesseract.js-core/package.json').version;
+  } catch (error) {
+
+    console.error(
+      'GAGAL MEMBACA VERSI tesseract.js-core:',
+      error?.message || error
+    );
+
+    cachedCoreVersion = null;
+  }
+
+  return cachedCoreVersion;
+}
+
 async function runOCR(imageBuffer) {
   let worker = null;
 
   try {
     console.log('OCR TESSERACT: MEMULAI');
 
-    worker = await createWorker('eng');
+    const coreVersion =
+      getTesseractCoreVersion();
+
+    const workerOptions = {
+
+      corePath:
+        coreVersion
+          ? `https://cdn.jsdelivr.net/npm/tesseract.js-core@${coreVersion}`
+          : 'https://cdn.jsdelivr.net/npm/tesseract.js-core',
+
+      cachePath: '/tmp'
+    };
+
+    console.log(
+      'OCR CORE PATH:',
+      workerOptions.corePath
+    );
+
+    worker = await createWorker(
+      'eng',
+      1,
+      workerOptions
+    );
 
     /*
       Karena hasil yang kita cari terutama angka,
