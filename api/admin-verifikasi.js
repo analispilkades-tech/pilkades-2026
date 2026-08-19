@@ -5,7 +5,153 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
+/*
+=========================================================
+KONFIGURASI
+=========================================================
+*/
+
+const ACTIONS = [
+  'SAHKAN_MANUAL',
+  'SAHKAN_PLANO',
+  'UBAH_DATA',
+  'RESET_VERIFIKASI'
+];
+
+const MIN_OCR_CONFIDENCE = 40;
+
+
+/*
+=========================================================
+HELPER
+=========================================================
+*/
+
+function numberOrZero(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(n));
+}
+
+
+function calculateTotal(data) {
+  return (
+    numberOrZero(data.suara_calon_01) +
+    numberOrZero(data.suara_calon_02) +
+    numberOrZero(data.suara_calon_03) +
+    numberOrZero(data.suara_calon_04) +
+    numberOrZero(data.suara_calon_05) +
+    numberOrZero(data.suara_tidak_sah)
+  );
+}
+
+
+function calculateOcrTotal(plano) {
+  return (
+    numberOrZero(plano.ocr_calon_01) +
+    numberOrZero(plano.ocr_calon_02) +
+    numberOrZero(plano.ocr_calon_03) +
+    numberOrZero(plano.ocr_calon_04) +
+    numberOrZero(plano.ocr_calon_05) +
+    numberOrZero(plano.ocr_tidak_sah)
+  );
+}
+
+
+/*
+=========================================================
+AUDIT LOG
+=========================================================
+*/
+
+async function logAktivitas({
+  jenis_aksi,
+  admin_nama,
+  hasil_sebelum = null,
+  hasil_sesudah = null,
+  keterangan = ''
+}) {
+
+  try {
+
+    await supabase
+      .from('log_aktivitas')
+      .insert({
+
+        sumber_aksi:
+          'ADMIN_PANEL',
+
+        jenis_aksi,
+
+        nrp_saksi:
+          hasil_sebelum?.nrp_saksi ||
+          hasil_sesudah?.nrp_saksi ||
+          null,
+
+        nama_saksi:
+          hasil_sebelum?.nama_saksi ||
+          hasil_sesudah?.nama_saksi ||
+          null,
+
+        kecamatan:
+          hasil_sebelum?.kecamatan ||
+          hasil_sesudah?.kecamatan ||
+          null,
+
+        desa:
+          hasil_sebelum?.desa ||
+          hasil_sesudah?.desa ||
+          null,
+
+        tps:
+          hasil_sebelum?.tps ||
+          hasil_sesudah?.tps ||
+          null,
+
+        data_sebelum:
+          hasil_sebelum,
+
+        data_sesudah:
+          hasil_sesudah,
+
+        keterangan:
+          `[Admin: ${admin_nama || 'Admin'}] ${keterangan}`
+
+      });
+
+  } catch (error) {
+
+    /*
+     * Audit log tidak boleh membuat
+     * proses utama gagal.
+     */
+
+    console.error(
+      '[ADMIN] LOG AKTIVITAS ERROR:',
+      error
+    );
+
+  }
+}
+
+
+/*
+=========================================================
+MAIN HANDLER
+=========================================================
+*/
+
 export default async function handler(req, res) {
+
+  /*
+  -------------------------------------------------------
+  CORS
+  -------------------------------------------------------
+  */
 
   res.setHeader(
     'Access-Control-Allow-Origin',
@@ -22,16 +168,31 @@ export default async function handler(req, res) {
     'Content-Type'
   );
 
+
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+
+    return res
+      .status(200)
+      .end();
+
   }
 
+
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      ok: false,
-      error: 'Method not allowed'
-    });
+
+    return res
+      .status(405)
+      .json({
+
+        ok: false,
+
+        error:
+          'Method not allowed'
+
+      });
+
   }
+
 
   try {
 
@@ -39,124 +200,214 @@ export default async function handler(req, res) {
       id,
       action,
       admin_nama,
-
-      suara_calon_01,
-      suara_calon_02,
-      suara_calon_03,
-      suara_calon_04,
-      suara_calon_05,
-      suara_tidak_sah
-
+      data
     } = req.body || {};
 
-    if (!id) {
-      return res.status(400).json({
-        ok: false,
-        error: 'ID hasil_suara wajib diisi'
-      });
-    }
-
-    const ACTIONS = [
-      'SAHKAN_MANUAL',
-      'SAHKAN_PLANO',
-      'EDIT_HASIL'
-    ];
-
-    if (!ACTIONS.includes(action)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Aksi admin tidak valid'
-      });
-    }
 
     /*
-     * =========================================================
-     * AMBIL DATA HASIL SUARA
-     * =========================================================
-     */
+    -------------------------------------------------------
+    VALIDASI ID
+    -------------------------------------------------------
+    */
+
+    if (!id) {
+
+      return res
+        .status(400)
+        .json({
+
+          ok: false,
+
+          error:
+            'ID hasil_suara wajib diisi'
+
+        });
+
+    }
+
+
+    /*
+    -------------------------------------------------------
+    VALIDASI ACTION
+    -------------------------------------------------------
+    */
+
+    if (!ACTIONS.includes(action)) {
+
+      return res
+        .status(400)
+        .json({
+
+          ok: false,
+
+          error:
+            `Aksi admin tidak valid. ` +
+            `Aksi yang tersedia: ${ACTIONS.join(', ')}`
+
+        });
+
+    }
+
+
+    /*
+    =======================================================
+    AMBIL DATA HASIL SUARA
+    =======================================================
+    */
 
     const {
       data: hasil,
       error: hasilError
     } = await supabase
+
       .from('hasil_suara')
+
       .select('*')
+
       .eq('id', id)
+
       .single();
 
+
     if (hasilError || !hasil) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Data hasil suara tidak ditemukan'
-      });
+
+      console.error(
+        '[ADMIN] DATA HASIL SUARA ERROR:',
+        hasilError
+      );
+
+      return res
+        .status(404)
+        .json({
+
+          ok: false,
+
+          error:
+            'Data hasil suara tidak ditemukan'
+
+        });
+
     }
 
+
     /*
-     * =========================================================
-     * SAHKAN MANUAL
-     *
-     * Admin boleh mengesahkan hasil manual selama
-     * data belum dikunci sebagai final.
-     * =========================================================
-     */
+    =======================================================
+    SIMPAN SNAPSHOT DATA SEBELUM PERUBAHAN
+    =======================================================
+    */
+
+    const dataSebelum = {
+
+      suara_calon_01:
+        hasil.suara_calon_01,
+
+      suara_calon_02:
+        hasil.suara_calon_02,
+
+      suara_calon_03:
+        hasil.suara_calon_03,
+
+      suara_calon_04:
+        hasil.suara_calon_04,
+
+      suara_calon_05:
+        hasil.suara_calon_05,
+
+      suara_tidak_sah:
+        hasil.suara_tidak_sah,
+
+      total_suara_masuk:
+        hasil.total_suara_masuk,
+
+      status_verifikasi:
+        hasil.status_verifikasi
+
+    };
+
+
+    /*
+    =======================================================
+    ACTION 1
+    SAHKAN MANUAL
+    =======================================================
+    
+    Artinya:
+
+    Admin menyatakan bahwa angka LIVECOUNT saat ini
+    sudah benar berdasarkan pemeriksaan admin.
+
+    Tidak ada angka yang diubah.
+    */
 
     if (action === 'SAHKAN_MANUAL') {
 
       const {
+        data: updated,
         error: updateError
       } = await supabase
+
         .from('hasil_suara')
+
         .update({
-          status_verifikasi: 'VERIFIED_BY_ADMIN'
+
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN'
+
         })
-        .eq('id', id);
+
+        .eq('id', id)
+
+        .select()
+
+        .single();
+
 
       if (updateError) {
-        return res.status(500).json({
-          ok: false,
-          error: updateError.message
-        });
+
+        console.error(
+          '[ADMIN] SAHKAN MANUAL ERROR:',
+          updateError
+        );
+
+        return res
+          .status(500)
+          .json({
+
+            ok: false,
+
+            error:
+              updateError.message
+
+          });
+
       }
 
-      /*
-       * AUDIT LOG
-       */
 
-      await supabase
-        .from('log_aktivitas')
-        .insert({
-          sumber_aksi: 'ADMIN_PANEL',
-          jenis_aksi: 'ADMIN_SAHKAN_MANUAL',
+      await logAktivitas({
 
-          nrp_saksi:
-            hasil.nrp_saksi,
+        jenis_aksi:
+          'ADMIN_SAHKAN_MANUAL',
 
-          nama_saksi:
-            hasil.nama_saksi,
+        admin_nama,
 
-          kecamatan:
-            hasil.kecamatan,
+        hasil_sebelum:
+          dataSebelum,
 
-          desa:
-            hasil.desa,
+        hasil_sesudah: {
 
-          tps:
-            hasil.tps,
+          ...dataSebelum,
 
-          data_sebelum: {
-            status_verifikasi:
-              hasil.status_verifikasi
-          },
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN'
 
-          data_sesudah: {
-            status_verifikasi:
-              'VERIFIED_BY_ADMIN'
-          },
+        },
 
-          keterangan:
-            `Admin ${admin_nama || 'Admin'} ` +
-            `mengesahkan hasil input manual TPS ${hasil.tps}`
-        });
+        keterangan:
+          'Admin mengesahkan hasil input manual. ' +
+          'Angka livecount tidak diubah.'
+
+      });
+
 
       console.log(
         `[ADMIN] ${admin_nama || 'Admin'} ` +
@@ -164,145 +415,239 @@ export default async function handler(req, res) {
         `hasil_suara ID=${id}`
       );
 
-      return res.status(200).json({
-        ok: true,
-        message:
-          'Hasil input manual berhasil disahkan admin',
 
-        status_verifikasi:
-          'VERIFIED_BY_ADMIN'
-      });
+      return res
+        .status(200)
+        .json({
+
+          ok: true,
+
+          message:
+            'Hasil input manual berhasil disahkan admin.',
+
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN',
+
+          data:
+            updated
+
+        });
+
     }
 
+
     /*
-     * =========================================================
-     * SAHKAN PLANO
-     * =========================================================
-     */
+    =======================================================
+    ACTION 2
+    SAHKAN PLANO
+    =======================================================
+    
+    PENTING:
+
+    OCR hanya boleh diterapkan jika:
+
+    1. Ada hasil OCR COMPLETED
+    2. Confidence >= 40
+    3. Nilai OCR valid
+    */
 
     if (action === 'SAHKAN_PLANO') {
 
       /*
-       * Ambil OCR TERBARU yang benar-benar COMPLETED.
-       *
-       * SKIPPED / FAILED / LOW_CONFIDENCE tidak boleh
-       * diterapkan ke Live Count.
-       */
+      -----------------------------------------------------
+      AMBIL OCR TERBARU
+      -----------------------------------------------------
+      */
 
       const {
         data: plano,
         error: planoError
       } = await supabase
+
         .from('plano_uploads')
+
         .select('*')
-        .eq('hasil_suara_id', id)
-        .eq('ocr_status', 'COMPLETED')
-        .order('created_at', {
-          ascending: false
-        })
+
+        .eq(
+          'hasil_suara_id',
+          id
+        )
+
+        .eq(
+          'ocr_status',
+          'COMPLETED'
+        )
+
+        .order(
+          'created_at',
+          {
+            ascending: false
+          }
+        )
+
         .limit(1)
+
         .maybeSingle();
 
+
       if (planoError) {
-        return res.status(500).json({
-          ok: false,
-          error: planoError.message
-        });
+
+        console.error(
+          '[ADMIN] AMBIL PLANO ERROR:',
+          planoError
+        );
+
+        return res
+          .status(500)
+          .json({
+
+            ok: false,
+
+            error:
+              planoError.message
+
+          });
+
       }
+
 
       if (!plano) {
-        return res.status(400).json({
-          ok: false,
-          error:
-            'Tidak ada hasil OCR plano yang valid untuk disahkan.'
-        });
+
+        return res
+          .status(404)
+          .json({
+
+            ok: false,
+
+            error:
+              'Hasil OCR plano belum tersedia.'
+
+          });
+
       }
 
+
       /*
-       * Confidence minimum
-       */
+      -----------------------------------------------------
+      CEK CONFIDENCE
+      -----------------------------------------------------
+      */
 
       const confidence =
-        Number(plano.ocr_confidence || 0);
+        Number(
+          plano.ocr_confidence || 0
+        );
 
-      if (confidence < 40) {
-        return res.status(400).json({
-          ok: false,
-          error:
-            `Hasil OCR tidak memenuhi batas confidence. ` +
-            `Confidence=${confidence}, minimum=40.`
-        });
+
+      if (
+        !Number.isFinite(confidence) ||
+        confidence < MIN_OCR_CONFIDENCE
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            ok: false,
+
+            error:
+              `Plano tidak dapat disahkan otomatis. ` +
+              `Confidence OCR hanya ${confidence}. ` +
+              `Minimum yang diperlukan ${MIN_OCR_CONFIDENCE}. ` +
+              `Silakan gunakan Ubah Data atau Sahkan Manual.`,
+
+            code:
+              'OCR_CONFIDENCE_TOO_LOW',
+
+            confidence,
+
+            minimum:
+              MIN_OCR_CONFIDENCE
+
+          });
+
       }
 
-      /*
-       * Hitung total
-       */
-
-      const total =
-        Number(plano.ocr_calon_01 || 0) +
-        Number(plano.ocr_calon_02 || 0) +
-        Number(plano.ocr_calon_03 || 0) +
-        Number(plano.ocr_calon_04 || 0) +
-        Number(plano.ocr_calon_05 || 0) +
-        Number(plano.ocr_tidak_sah || 0);
 
       /*
-       * Simpan data sebelum
-       */
+      -----------------------------------------------------
+      AMBIL ANGKA OCR
+      -----------------------------------------------------
+      */
 
-      const dataSebelum = {
+      const ocrData = {
+
         suara_calon_01:
-          hasil.suara_calon_01,
+          numberOrZero(
+            plano.ocr_calon_01
+          ),
 
         suara_calon_02:
-          hasil.suara_calon_02,
+          numberOrZero(
+            plano.ocr_calon_02
+          ),
 
         suara_calon_03:
-          hasil.suara_calon_03,
+          numberOrZero(
+            plano.ocr_calon_03
+          ),
 
         suara_calon_04:
-          hasil.suara_calon_04,
+          numberOrZero(
+            plano.ocr_calon_04
+          ),
 
         suara_calon_05:
-          hasil.suara_calon_05,
+          numberOrZero(
+            plano.ocr_calon_05
+          ),
 
         suara_tidak_sah:
-          hasil.suara_tidak_sah,
+          numberOrZero(
+            plano.ocr_tidak_sah
+          )
 
-        total_suara_masuk:
-          hasil.total_suara_masuk,
-
-        status_verifikasi:
-          hasil.status_verifikasi
       };
 
+
+      const total =
+        calculateTotal(
+          ocrData
+        );
+
+
       /*
-       * Terapkan hasil plano ke Live Count
-       */
+      -----------------------------------------------------
+      UPDATE LIVECOUNT
+      -----------------------------------------------------
+      */
 
       const {
+        data: updated,
         error: updateError
       } = await supabase
+
         .from('hasil_suara')
+
         .update({
 
           suara_calon_01:
-            plano.ocr_calon_01,
+            ocrData.suara_calon_01,
 
           suara_calon_02:
-            plano.ocr_calon_02,
+            ocrData.suara_calon_02,
 
           suara_calon_03:
-            plano.ocr_calon_03,
+            ocrData.suara_calon_03,
 
           suara_calon_04:
-            plano.ocr_calon_04,
+            ocrData.suara_calon_04,
 
           suara_calon_05:
-            plano.ocr_calon_05,
+            ocrData.suara_calon_05,
 
           suara_tidak_sah:
-            plano.ocr_tidak_sah,
+            ocrData.suara_tidak_sah,
 
           total_suara_masuk:
             total,
@@ -311,79 +656,79 @@ export default async function handler(req, res) {
             'VERIFIED_BY_ADMIN'
 
         })
-        .eq('id', id);
+
+        .eq('id', id)
+
+        .select()
+
+        .single();
+
 
       if (updateError) {
-        return res.status(500).json({
-          ok: false,
-          error: updateError.message
-        });
+
+        console.error(
+          '[ADMIN] UPDATE PLANO ERROR:',
+          updateError
+        );
+
+        return res
+          .status(500)
+          .json({
+
+            ok: false,
+
+            error:
+              updateError.message
+
+          });
+
       }
 
-      /*
-       * AUDIT LOG
-       */
 
-      await supabase
-        .from('log_aktivitas')
-        .insert({
+      await logAktivitas({
 
-          sumber_aksi:
-            'ADMIN_PANEL',
+        jenis_aksi:
+          'ADMIN_SAHKAN_PLANO',
 
-          jenis_aksi:
-            'ADMIN_SAHKAN_PLANO',
+        admin_nama,
 
-          nrp_saksi:
-            hasil.nrp_saksi,
+        hasil_sebelum:
+          dataSebelum,
 
-          nama_saksi:
-            hasil.nama_saksi,
+        hasil_sesudah: {
 
-          kecamatan:
-            hasil.kecamatan,
+          suara_calon_01:
+            ocrData.suara_calon_01,
 
-          desa:
-            hasil.desa,
+          suara_calon_02:
+            ocrData.suara_calon_02,
 
-          tps:
-            hasil.tps,
+          suara_calon_03:
+            ocrData.suara_calon_03,
 
-          data_sebelum:
-            dataSebelum,
+          suara_calon_04:
+            ocrData.suara_calon_04,
 
-          data_sesudah: {
+          suara_calon_05:
+            ocrData.suara_calon_05,
 
-            suara_calon_01:
-              plano.ocr_calon_01,
+          suara_tidak_sah:
+            ocrData.suara_tidak_sah,
 
-            suara_calon_02:
-              plano.ocr_calon_02,
+          total_suara_masuk:
+            total,
 
-            suara_calon_03:
-              plano.ocr_calon_03,
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN'
 
-            suara_calon_04:
-              plano.ocr_calon_04,
+        },
 
-            suara_calon_05:
-              plano.ocr_calon_05,
+        keterangan:
+          `Admin mengesahkan hasil plano/OCR. ` +
+          `Confidence=${confidence}.`
 
-            suara_tidak_sah:
-              plano.ocr_tidak_sah,
+      });
 
-            total_suara_masuk:
-              total,
-
-            status_verifikasi:
-              'VERIFIED_BY_ADMIN'
-          },
-
-          keterangan:
-            `Admin ${admin_nama || 'Admin'} ` +
-            `mengesahkan hasil plano TPS ${hasil.tps}. ` +
-            `Plano upload ID=${plano.id}`
-        });
 
       console.log(
         `[ADMIN] ${admin_nama || 'Admin'} ` +
@@ -391,216 +736,378 @@ export default async function handler(req, res) {
         `hasil_suara ID=${id}`
       );
 
-      return res.status(200).json({
 
-        ok: true,
+      return res
+        .status(200)
+        .json({
 
-        message:
-          'Hasil plano berhasil disahkan admin',
+          ok: true,
 
-        status_verifikasi:
-          'VERIFIED_BY_ADMIN',
+          message:
+            'Hasil plano berhasil disahkan admin.',
 
-        applied: {
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN',
 
-          calon_01:
-            plano.ocr_calon_01,
+          confidence,
 
-          calon_02:
-            plano.ocr_calon_02,
+          applied:
+            ocrData,
 
-          calon_03:
-            plano.ocr_calon_03,
+          total,
 
-          calon_04:
-            plano.ocr_calon_04,
+          data:
+            updated
 
-          calon_05:
-            plano.ocr_calon_05,
+        });
 
-          tidak_sah:
-            plano.ocr_tidak_sah,
-
-          total
-        }
-      });
     }
 
+
     /*
-     * =========================================================
-     * EDIT HASIL
-     * =========================================================
-     */
+    =======================================================
+    ACTION 3
+    UBAH DATA
+    =======================================================
+    
+    Admin mengirim angka baru secara manual.
+    */
 
-    if (action === 'EDIT_HASIL') {
-
-      const nilai = [
-        suara_calon_01,
-        suara_calon_02,
-        suara_calon_03,
-        suara_calon_04,
-        suara_calon_05,
-        suara_tidak_sah
-      ];
+    if (action === 'UBAH_DATA') {
 
       /*
-       * Semua nilai harus berupa angka >= 0
-       */
+      -----------------------------------------------------
+      DATA WAJIB ADA
+      -----------------------------------------------------
+      */
 
-      for (const value of nilai) {
+      if (!data || typeof data !== 'object') {
 
-        if (
-          value !== null &&
-          value !== undefined &&
-          (
-            !Number.isFinite(Number(value)) ||
-            Number(value) < 0
-          )
-        ) {
+        return res
+          .status(400)
+          .json({
 
-          return res.status(400).json({
             ok: false,
+
             error:
-              'Nilai suara harus berupa angka >= 0'
+              'Data perubahan wajib dikirim.'
+
           });
 
-        }
       }
 
-      const calon01 =
-        Number(suara_calon_01 ?? 0);
 
-      const calon02 =
-        Number(suara_calon_02 ?? 0);
+      /*
+      -----------------------------------------------------
+      NORMALISASI ANGKA
+      -----------------------------------------------------
+      */
 
-      const calon03 =
-        Number(suara_calon_03 ?? 0);
+      const newData = {
 
-      const calon04 =
-        Number(suara_calon_04 ?? 0);
-
-      const calon05 =
-        Number(suara_calon_05 ?? 0);
-
-      const tidakSah =
-        Number(suara_tidak_sah ?? 0);
-
-      const total =
-        calon01 +
-        calon02 +
-        calon03 +
-        calon04 +
-        calon05 +
-        tidakSah;
-
-      const dataSebelum = {
         suara_calon_01:
-          hasil.suara_calon_01,
+          numberOrZero(
+            data.suara_calon_01
+          ),
 
         suara_calon_02:
-          hasil.suara_calon_02,
+          numberOrZero(
+            data.suara_calon_02
+          ),
 
         suara_calon_03:
-          hasil.suara_calon_03,
+          numberOrZero(
+            data.suara_calon_03
+          ),
 
         suara_calon_04:
-          hasil.suara_calon_04,
+          numberOrZero(
+            data.suara_calon_04
+          ),
 
         suara_calon_05:
-          hasil.suara_calon_05,
+          numberOrZero(
+            data.suara_calon_05
+          ),
 
         suara_tidak_sah:
-          hasil.suara_tidak_sah,
+          numberOrZero(
+            data.suara_tidak_sah
+          )
 
-        total_suara_masuk:
-          hasil.total_suara_masuk,
-
-        status_verifikasi:
-          hasil.status_verifikasi
       };
 
-      const dataSesudah = {
-        suara_calon_01: calon01,
-        suara_calon_02: calon02,
-        suara_calon_03: calon03,
-        suara_calon_04: calon04,
-        suara_calon_05: calon05,
-        suara_tidak_sah: tidakSah,
-        total_suara_masuk: total,
-        status_verifikasi:
-          'VERIFIED_BY_ADMIN'
-      };
+
+      /*
+      -----------------------------------------------------
+      HITUNG TOTAL SERVER-SIDE
+      -----------------------------------------------------
+      */
+
+      const total =
+        calculateTotal(
+          newData
+        );
+
+
+      /*
+      -----------------------------------------------------
+      UPDATE
+      -----------------------------------------------------
+      */
 
       const {
+        data: updated,
         error: updateError
       } = await supabase
+
         .from('hasil_suara')
-        .update(dataSesudah)
-        .eq('id', id);
+
+        .update({
+
+          suara_calon_01:
+            newData.suara_calon_01,
+
+          suara_calon_02:
+            newData.suara_calon_02,
+
+          suara_calon_03:
+            newData.suara_calon_03,
+
+          suara_calon_04:
+            newData.suara_calon_04,
+
+          suara_calon_05:
+            newData.suara_calon_05,
+
+          suara_tidak_sah:
+            newData.suara_tidak_sah,
+
+          total_suara_masuk:
+            total,
+
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN'
+
+        })
+
+        .eq('id', id)
+
+        .select()
+
+        .single();
+
 
       if (updateError) {
 
-        return res.status(500).json({
-          ok: false,
-          error: updateError.message
-        });
+        console.error(
+          '[ADMIN] UBAH DATA ERROR:',
+          updateError
+        );
+
+        return res
+          .status(500)
+          .json({
+
+            ok: false,
+
+            error:
+              updateError.message
+
+          });
 
       }
 
+
       /*
-       * AUDIT LOG EDIT ADMIN
-       */
+      -----------------------------------------------------
+      AUDIT LOG
+      -----------------------------------------------------
+      */
 
-      await supabase
-        .from('log_aktivitas')
-        .insert({
+      await logAktivitas({
 
-          sumber_aksi:
-            'ADMIN_PANEL',
+        jenis_aksi:
+          'ADMIN_UBAH_DATA',
 
-          jenis_aksi:
-            'ADMIN_EDIT_HASIL',
+        admin_nama,
 
-          nrp_saksi:
-            hasil.nrp_saksi,
+        hasil_sebelum:
+          dataSebelum,
 
-          nama_saksi:
-            hasil.nama_saksi,
+        hasil_sesudah: {
 
-          kecamatan:
-            hasil.kecamatan,
+          ...newData,
 
-          desa:
-            hasil.desa,
+          total_suara_masuk:
+            total,
 
-          tps:
-            hasil.tps,
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN'
 
-          data_sebelum:
-            dataSebelum,
+        },
 
-          data_sesudah:
-            dataSesudah,
+        keterangan:
+          'Admin melakukan koreksi angka hasil suara secara manual.'
 
-          keterangan:
-            `Admin ${admin_nama || 'Admin'} ` +
-            `mengubah hasil suara TPS ${hasil.tps}.`
+      });
+
+
+      console.log(
+        `[ADMIN] ${admin_nama || 'Admin'} ` +
+        `MENGUBAH DATA ` +
+        `hasil_suara ID=${id}`
+      );
+
+
+      return res
+        .status(200)
+        .json({
+
+          ok: true,
+
+          message:
+            'Data hasil suara berhasil diubah dan disahkan admin.',
+
+          status_verifikasi:
+            'VERIFIED_BY_ADMIN',
+
+          data: {
+
+            ...newData,
+
+            total_suara_masuk:
+              total
+
+          },
+
+          record:
+            updated
+
         });
 
-      return res.status(200).json({
-
-        ok: true,
-
-        message:
-          'Data hasil suara berhasil diubah dan disahkan admin',
-
-        status_verifikasi:
-          'VERIFIED_BY_ADMIN',
-
-        data:
-          dataSesudah
-      });
     }
+
+
+    /*
+    =======================================================
+    ACTION 4
+    RESET VERIFIKASI
+    =======================================================
+    
+    Digunakan jika admin ingin membuka kembali
+    data untuk proses audit.
+    */
+
+    if (
+      action ===
+      'RESET_VERIFIKASI'
+    ) {
+
+      const {
+        data: updated,
+        error: updateError
+      } = await supabase
+
+        .from('hasil_suara')
+
+        .update({
+
+          status_verifikasi:
+            'MEMERLUKAN VERIFIKASI ADMIN'
+
+        })
+
+        .eq('id', id)
+
+        .select()
+
+        .single();
+
+
+      if (updateError) {
+
+        console.error(
+          '[ADMIN] RESET ERROR:',
+          updateError
+        );
+
+        return res
+          .status(500)
+          .json({
+
+            ok: false,
+
+            error:
+              updateError.message
+
+          });
+
+      }
+
+
+      await logAktivitas({
+
+        jenis_aksi:
+          'ADMIN_RESET_VERIFIKASI',
+
+        admin_nama,
+
+        hasil_sebelum:
+          dataSebelum,
+
+        hasil_sesudah: {
+
+          ...dataSebelum,
+
+          status_verifikasi:
+            'MEMERLUKAN VERIFIKASI ADMIN'
+
+        },
+
+        keterangan:
+          'Admin membuka kembali data untuk audit/review.'
+
+      });
+
+
+      return res
+        .status(200)
+        .json({
+
+          ok: true,
+
+          message:
+            'Status verifikasi berhasil dikembalikan ke antrean audit.',
+
+          status_verifikasi:
+            'MEMERLUKAN VERIFIKASI ADMIN',
+
+          data:
+            updated
+
+        });
+
+    }
+
+
+    /*
+    =======================================================
+    FALLBACK
+    =======================================================
+    */
+
+    return res
+      .status(400)
+      .json({
+
+        ok: false,
+
+        error:
+          'Aksi tidak dapat diproses.'
+
+      });
+
 
   } catch (err) {
 
@@ -609,15 +1116,18 @@ export default async function handler(req, res) {
       err
     );
 
-    return res.status(500).json({
-      ok: false,
-      error:
-        err.message ||
-        'Server error'
-    });
-  }
-}
+    return res
+      .status(500)
+      .json({
 
-<td class="p-3 text-center">
-  ${renderAdminActions(item)}
-</td>
+        ok: false,
+
+        error:
+          err?.message ||
+          'Server error'
+
+      });
+
+  }
+
+}
