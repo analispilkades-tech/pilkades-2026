@@ -68,7 +68,7 @@
       </div>
     </div>
 
-    <!-- Ringkasan Progress TPS & Total Suara -->
+    <!-- Ringkasan Progress TPS & Total Suara vs DPT -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <!-- Progress TPS -->
       <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
@@ -95,7 +95,7 @@
       </div>
     </div>
 
-    <!-- KARTU PEROLEHAN SUARA CALON (Hanya muncul jika Filter Desa atau TPS aktif) -->
+    <!-- KARTU PEROLEHAN SUARA CALON (Hanya tampil bila Filter Desa atau TPS aktif) -->
     <div id="calonCardsSection" class="mb-6 hidden">
       <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Perolehan Suara Calon</h3>
       <div id="calonCardsContainer" class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -179,9 +179,9 @@
         const response = await fetch(API_URL);
         const result = await response.json();
         
-        globalMasterDesa = result.master_desa || [];
-        const data = result.data || result || [];
-        rawData = Array.isArray(data) ? data.filter(d => d.status_verifikasi !== 'REJECTED') : [];
+        globalMasterDesa = Array.isArray(result.master_desa) ? result.master_desa : [];
+        const fetchedData = Array.isArray(result.data) ? result.data : [];
+        rawData = fetchedData.filter(d => d.status_verifikasi !== 'REJECTED');
         
         populateDropdowns();
         applyFilters();
@@ -193,14 +193,13 @@
 
     function populateDropdowns() {
       const kecSelect = document.getElementById("filterKec");
-      const selectedKec = kecSelect.value;
+      const currentKec = kecSelect.value;
 
-      // Ambil daftar kecamatan unik dari master_desa (atau rawData sebagai fallback)
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
-      const kecList = [...new Set(dataSource.map(item => item.kecamatan).filter(Boolean))].sort();
+      const kecList = [...new Set(dataSource.map(item => String(item.kecamatan || '').trim()).filter(Boolean))].sort();
 
       kecSelect.innerHTML = '<option value="">-- Semua Kecamatan --</option>' + 
-        kecList.map(k => `<option value="${k}" ${k === selectedKec ? 'selected' : ''}>${k}</option>`).join('');
+        kecList.map(k => `<option value="${k}" ${k.toUpperCase() === currentKec.toUpperCase() ? 'selected' : ''}>${k}</option>`).join('');
 
       populateDesaAndTPS();
     }
@@ -216,61 +215,69 @@
     }
 
     function populateDesaAndTPS() {
-      const kecVal = document.getElementById("filterKec").value;
+      const kecVal = document.getElementById("filterKec").value.toUpperCase().trim();
       const desaSelect = document.getElementById("filterDesa");
-      const selectedDesa = desaSelect.value;
+      const currentDesa = desaSelect.value;
 
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
-      let filteredData = dataSource;
+      let filtered = dataSource;
       if (kecVal !== "") {
-        filteredData = dataSource.filter(item => item.kecamatan === kecVal);
+        filtered = dataSource.filter(item => String(item.kecamatan || '').toUpperCase().trim() === kecVal);
       }
 
-      const desaList = [...new Set(filteredData.map(item => item.desa).filter(Boolean))].sort();
+      const desaList = [...new Set(filtered.map(item => String(item.desa || '').trim()).filter(Boolean))].sort();
       desaSelect.innerHTML = '<option value="">-- Semua Desa --</option>' + 
-        desaList.map(d => `<option value="${d}" ${d === selectedDesa ? 'selected' : ''}>${d}</option>`).join('');
+        desaList.map(d => `<option value="${d}" ${d.toUpperCase() === currentDesa.toUpperCase() ? 'selected' : ''}>${d}</option>`).join('');
 
       populateTPSOnly();
     }
 
     function populateTPSOnly() {
-      const kecVal = document.getElementById("filterKec").value;
-      const desaVal = document.getElementById("filterDesa").value;
+      const kecVal = document.getElementById("filterKec").value.toUpperCase().trim();
+      const desaVal = document.getElementById("filterDesa").value.toUpperCase().trim();
       const tpsSelect = document.getElementById("filterTPS");
-      const selectedTPS = tpsSelect.value;
+      const currentTPS = tpsSelect.value;
 
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
-      let filteredData = dataSource;
-      if (kecVal !== "") filteredData = filteredData.filter(item => item.kecamatan === kecVal);
-      if (desaVal !== "") filteredData = filteredData.filter(item => item.desa === desaVal);
+      let filtered = dataSource;
+      if (kecVal !== "") filtered = filtered.filter(item => String(item.kecamatan || '').toUpperCase().trim() === kecVal);
+      if (desaVal !== "") filtered = filtered.filter(item => String(item.desa || '').toUpperCase().trim() === desaVal);
 
-      const tpsList = [...new Set(filteredData.map(item => item.tps).filter(Boolean))].sort((a,b) => Number(a) - Number(b));
+      const tpsList = [...new Set(filtered.map(item => String(item.tps || '').trim()).filter(Boolean))].sort((a,b) => Number(a) - Number(b));
       tpsSelect.innerHTML = '<option value="">-- Semua TPS --</option>' + 
-        tpsList.map(t => `<option value="${t}" ${t === selectedTPS ? 'selected' : ''}>${t}</option>`).join('');
+        tpsList.map(t => `<option value="${t}" ${t.toUpperCase() === currentTPS.toUpperCase() ? 'selected' : ''}>${t}</option>`).join('');
     }
 
     function applyFilters() {
-      const kecVal = document.getElementById("filterKec").value;
-      const desaVal = document.getElementById("filterDesa").value;
-      const tpsVal = document.getElementById("filterTPS").value;
+      const kecVal = document.getElementById("filterKec").value.toUpperCase().trim();
+      const desaVal = document.getElementById("filterDesa").value.toUpperCase().trim();
+      const tpsVal = document.getElementById("filterTPS").value.toUpperCase().trim();
       const rowsLimit = parseInt(document.getElementById("rowsPerPage").value, 10) || 10;
 
-      // 1. Filter Master Desa untuk perhitungan Total TPS & Total DPT Target
+      // 1. Filter Master Desa untuk statistik Total TPS & DPT Target
       const dataSourceMaster = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
       const filteredMaster = dataSourceMaster.filter(item => {
-        return (kecVal === "" || item.kecamatan === kecVal) &&
-               (desaVal === "" || item.desa === desaVal) &&
-               (tpsVal === "" || item.tps === tpsVal);
+        const itemKec = String(item.kecamatan || '').toUpperCase().trim();
+        const itemDesa = String(item.desa || '').toUpperCase().trim();
+        const itemTps = String(item.tps || '').toUpperCase().trim();
+
+        return (kecVal === "" || itemKec === kecVal) &&
+               (desaVal === "" || itemDesa === desaVal) &&
+               (tpsVal === "" || itemTps === tpsVal);
       });
 
       // 2. Filter Hasil Suara
       let filteredResults = rawData.filter(item => {
-        return (kecVal === "" || item.kecamatan === kecVal) &&
-               (desaVal === "" || item.desa === desaVal) &&
-               (tpsVal === "" || item.tps === tpsVal);
+        const itemKec = String(item.kecamatan || '').toUpperCase().trim();
+        const itemDesa = String(item.desa || '').toUpperCase().trim();
+        const itemTps = String(item.tps || '').toUpperCase().trim();
+
+        return (kecVal === "" || itemKec === kecVal) &&
+               (desaVal === "" || itemDesa === desaVal) &&
+               (tpsVal === "" || itemTps === tpsVal);
       });
 
-      // Urutkan data terbaru di paling atas
+      // Urutkan data terbaru di paling atas (Timestamp/ID Descending)
       filteredResults.sort((a, b) => {
         const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -278,7 +285,7 @@
         return Number(b.id || 0) - Number(a.id || 0);
       });
 
-      // KONTROL KARTU CALON: Hanya tampil jika Filter Desa atau TPS aktif
+      // KONTROL KARTU CALON: Hanya tampil bila Filter Desa atau Filter TPS aktif!
       const calonSection = document.getElementById("calonCardsSection");
       if (desaVal !== "" || tpsVal !== "") {
         calonSection.classList.remove("hidden");
@@ -292,12 +299,12 @@
     }
 
     function renderDashboardStats(filteredMaster, filteredResults) {
-      // Perhitungan TPS berdasarkan Master vs Input Hasil
+      // Total TPS Target berdasarkan Filter
       const totalTPSDiperkirakan = filteredMaster.length || filteredResults.length || 0;
       const tpsMasuk = filteredResults.length;
       const tpsPercent = totalTPSDiperkirakan > 0 ? ((tpsMasuk / totalTPSDiperkirakan) * 100).toFixed(1) : "0.0";
 
-      // Perhitungan DPT Target vs Total Suara Masuk
+      // Total DPT Target berdasarkan Filter
       const totalDptTarget = filteredMaster.reduce((sum, item) => sum + Number(item.dpt || 0), 0);
       const totalSuaraMasuk = filteredResults.reduce((sum, item) => sum + Number(item.total_suara_masuk || 0), 0);
       const suaraPercent = totalDptTarget > 0 ? ((totalSuaraMasuk / totalDptTarget) * 100).toFixed(1) : "0.0";
@@ -305,13 +312,13 @@
       // Update UI Progress TPS
       document.getElementById("tpsCountText").innerText = `${tpsMasuk} / ${totalTPSDiperkirakan}`;
       document.getElementById("tpsPercentText").innerText = `(${tpsPercent}%)`;
-      document.getElementById("tpsProgressBar").style.width = `${Math.min(tpsPercent, 100)}%`;
+      document.getElementById("tpsProgressBar").style.width = `${Math.min(Number(tpsPercent), 100)}%`;
 
       // Update UI Total Suara Masuk vs DPT
       const dptFormatted = totalDptTarget > 0 ? totalDptTarget.toLocaleString('id-ID') : '0';
       document.getElementById("suaraCountText").innerText = `${totalSuaraMasuk.toLocaleString('id-ID')} / ${dptFormatted}`;
       document.getElementById("suaraPercentText").innerText = `(${suaraPercent}%)`;
-      document.getElementById("suaraProgressBar").style.width = `${Math.min(suaraPercent, 100)}%`;
+      document.getElementById("suaraProgressBar").style.width = `${Math.min(Number(suaraPercent), 100)}%`;
     }
 
     function renderCalonCards(data) {
