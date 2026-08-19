@@ -388,8 +388,8 @@ export default async function handler(req, res) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
       const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
       if (petugas) {
-        // [PEMBENAHAN] Mengubah id menjadi idx
-        await supabase.from('master_petugas').update({ mode_input: null, tps_aktif: null }).eq('idx', petugas.idx);
+        // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
+        await supabase.from('master_petugas').update({ mode_input: null, tps_aktif: null }).eq('nrp', petugas.nrp);
         await logAktivitas({
           jenis_aksi: 'BATAL_PROSES',
           nrp_saksi: petugas.nrp,
@@ -404,15 +404,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
+    const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
     if (waitUser) {
       if (!text.startsWith('/')) {
         if (text === String(waitUser.pin ?? '').trim()) {
-          // Lakukan update mutlak mengubah WAIT_ menjadi chatId murni berdasarkan idx
+          // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris untuk mengubah WAIT_ menjadi chatId murni
           const { error: updateErr } = await supabase
             .from('master_petugas')
             .update({ chat_id_telegram: chatId })
-            .eq('idx', waitUser.idx);
+            .eq('nrp', waitUser.nrp);
 
           if (updateErr) {
             console.error('GAGAL UPDATE CHAT ID:', updateErr);
@@ -579,8 +579,8 @@ const { data: waitUser } = await supabase.from('master_petugas').select('*').eq(
 
     if (command === '/kirimhasil' || command === '/edithasil') {
       const isEditMode = command === '/edithasil';
-      // [PEMBENAHAN] Mengubah id menjadi idx
-      await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('idx', petugas.idx);
+      // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
+      await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('nrp', petugas.nrp);
 
       await logAktivitas({
         jenis_aksi: isEditMode ? 'MODE_EDIT_HASIL' : 'MODE_KIRIM_HASIL',
@@ -613,8 +613,8 @@ const { data: waitUser } = await supabase.from('master_petugas').select('*').eq(
     }
 
     if (command === '/kirimplano') {
-      // [PEMBENAHAN] Mengubah id menjadi idx
-      await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('idx', petugas.idx);
+      // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
+      await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('nrp', petugas.nrp);
       
       await logAktivitas({
         jenis_aksi: 'MODE_KIRIM_PLANO',
@@ -647,8 +647,8 @@ const { data: waitUser } = await supabase.from('master_petugas').select('*').eq(
 
     if (text.startsWith('📍 TPS')) {
       const tpsSelected = text.replace('📍 TPS', '').trim();
-      // [PEMBENAHAN] Mengubah id menjadi idx
-      await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('idx', petugas.idx);
+      // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
+      await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('nrp', petugas.nrp);
 
       await logAktivitas({
         jenis_aksi: 'PILIH_TPS',
