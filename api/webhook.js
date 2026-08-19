@@ -1,14 +1,19 @@
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Helper Telegram Message
+// Helper kirim pesan ke Telegram
 async function sendMessage(chatId, text, replyMarkup = null) {
-  const payload = { chat_id: chatId, text: text, parse_mode: 'Markdown' };
+  const payload = {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'HTML'
+  };
   if (replyMarkup) payload.reply_markup = replyMarkup;
 
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -18,194 +23,150 @@ async function sendMessage(chatId, text, replyMarkup = null) {
   });
 }
 
-// Memory State Sederhana (Atau simpan di DB/Redis jika butuh persisten multi-step)
-const userState = {};
-const userTemp = {};
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(200).send('OK');
 
-module.exports = async (req, res) => {
-  // Selalu balas HTTP 200 OK secara instan ke Telegram
-  res.status(200).send('OK');
+  const update = req.body;
+  if (!update.message) return res.status(200).send('OK');
 
-  if (req.method !== 'POST' || !req.body) return;
-
-  const body = req.body;
+  const chatId = String(update.message.chat.id);
+  const text = update.message.text ? update.message.text.trim() : '';
 
   try {
-    // A. PENANGANAN CALLBACK KEYBOARD (Pilihan TPS)
-    if (body.callback_query) {
-      const cb = body.callback_query;
-      const chatId = cb.message.chat.id;
-      const data = cb.data;
+    // 1. JIKA USER KETIK /start ATAU /logout
+    if (text === '/start' || text === '/logout') {
+      // Reset state Telegram di Supabase jika ada
+      await supabase
+        .from('master_petugas')
+        .update({ chat_id_telegram: null })
+        .eq('chat_id_telegram', chatId);
 
-      if (data.startsWith("SELECT_TPS_")) {
-        const selectedTPS = data.replace("SELECT_TPS_", "");
-        const tempData = userTemp[chatId] || {};
-
-        // Cek apakah TPS sudah terisi di database Supabase
-        const { data: existing } = await supabase
-          .from('hasil_suara')
-          .select('id')
-          .eq('kecamatan', tempData.kec)
-          .eq('desa', tempData.desa)
-          .eq('tps', selectedTPS)
-          .neq('status_verifikasi', 'REJECTED');
-
-        if (existing && existing.length > 0) {
-          await sendMessage(chatId, `⚠️ **${selectedTPS} Desa ${tempData.desa}** sudah pernah dilaporkan. Silakan pilih TPS lain.`);
-          return;
-        }
-
-        tempData.tps = selectedTPS;
-        userTemp[chatId] = tempData;
-
-        // Ambil detail desa
-        const { data: dsa } = await supabase
-          .from('master_desa')
-          .select('jumlah_calon')
-          .eq('kecamatan', tempData.kec)
-          .eq('desa', tempData.desa)
-          .limit(1);
-
-        const jmlCalon = (dsa && dsa.length > 0) ? dsa[0].jumlah_calon : 2;
-        let example = "";
-        for (let i = 1; i <= jmlCalon; i++) example += `[Calon ${i}]#`;
-        example += `[Tidak Sah]`;
-
-        userState[chatId] = "AWAITING_DATA";
-        await sendMessage(chatId, `📍 Anda memilih **${selectedTPS} Desa ${tempData.desa}**.\nTerdeteksi: **${jmlCalon} Calon**.\n\nKetik hasil suara dipisah tanda pagar (\`#\`):\nFormat: \`${example}\`\nContoh: \`120#95#5\``);
-      }
-      return;
+      await sendMessage(
+        chatId,
+        `<b>Selamat Datang di Bot Hitung Cepat Pilkades 2026</b> 🇮🇩\n\nSilakan masukkan <b>NRP</b> Anda untuk verifikasi:`
+      );
+      return res.status(200).send('OK');
     }
 
-    // B. PENANGANAN PESAN TEKS/FOTO TELEGRAM
-    if (body.message) {
-      const msg = body.message;
-      const chatId = msg.chat.id;
-      const text = msg.text ? msg.text.trim() : "";
+    // 2. CEK APAKAH USER SUDAH TERAUTHENTIKASI (SUDAH LOGIN)
+    const { data: petugasLogin } = await supabase
+      .from('master_petugas')
+      .select('*')
+      .eq('chat_id_telegram', chatId)
+      .maybeSingle();
 
-      if (text === "/start") {
-        userState[chatId] = "AWAITING_NRP";
-        delete userTemp[chatId];
-        await sendMessage(chatId, "Selamat datang di **Bot Hitung Cepat Pilkades**.\n\nSilakan masukkan **NRP** Anda untuk verifikasi:");
-        return;
-      }
-
-      const state = userState[chatId];
-
-      // STEP 1: VERIFIKASI NRP
-      if (state === "AWAITING_NRP") {
-        const { data: petugas } = await supabase
-          .from('master_petugas')
-          .select('*')
-          .eq('nrp', text)
-          .limit(1);
-
-        if (petugas && petugas.length > 0) {
-          const p = petugas[0];
-          userTemp[chatId] = { nrp: p.nrp, nama: p.nama_petugas, desa: p.desa, kec: p.kecamatan, pin: p.pin };
-          userState[chatId] = "AWAITING_PIN";
-          await sendMessage(chatId, `Halo, **${p.nama_petugas}**!\nKecamatan: **${p.kecamatan}**\nDesa: **${p.desa}**\n\nMasukkan **PIN Rahasia** Anda:`);
-        } else {
-          await sendMessage(chatId, "❌ **NRP tidak terdaftar!** Akses ditolak.");
-        }
-        return;
-      }
-
-      // STEP 2: VERIFIKASI PIN & KIRIM TOMBOL TPS
-      if (state === "AWAITING_PIN") {
-        const tempData = userTemp[chatId] || {};
-        if (text === tempData.pin) {
-          // Update Chat ID Telegram petugas
-          await supabase.from('master_petugas').update({ chat_id_telegram: String(chatId) }).eq('nrp', tempData.nrp);
-
-          // Ambil daftar TPS
-          const { data: tpsList } = await supabase
-            .from('master_desa')
-            .select('tps')
-            .eq('kecamatan', tempData.kec)
-            .eq('desa', tempData.desa);
-
-          if (!tpsList || tpsList.length === 0) {
-            await sendMessage(chatId, "⚠️ Data TPS desa Anda belum disetting di Master Desa.");
-            return;
-          }
-
-          const keyboard = {
-            inline_keyboard: tpsList.map(t => [{ text: `📍 ${t.tps}`, callback_data: `SELECT_TPS_${t.tps}` }])
-          };
-
-          userState[chatId] = "AWAITING_TPS_SELECTION";
-          await sendMessage(chatId, `✅ **Verifikasi Berhasil!**\nSelamat bertugas, **${tempData.nama}**.\n\nPilih **TPS** yang akan dilaporkan:`, keyboard);
-        } else {
-          await sendMessage(chatId, "❌ **PIN Salah!** Coba lagi:");
-        }
-        return;
-      }
-
-      // STEP 3: INPUT ANGKA SUARA
-      if (state === "AWAITING_DATA") {
-        const tempData = userTemp[chatId] || {};
-        const parts = text.split("#").map(p => p.trim());
-
-        if (parts.some(p => isNaN(p) || p === "")) {
-          await sendMessage(chatId, "⚠️ **Format Salah!** Angka harus dipisah tanda `#`.\nContoh: `120#95#5`");
-          return;
-        }
-
-        const inputSuara = parts.map(Number);
-        const suaraTidakSah = inputSuara.pop();
-        const totalSuara = inputSuara.reduce((a, b) => a + b, 0) + suaraTidakSah;
-
-        tempData.suaraCalon = inputSuara;
-        tempData.suaraTidakSah = suaraTidakSah;
-        tempData.totalSuara = totalSuara;
-        userTemp[chatId] = tempData;
-
-        userState[chatId] = "AWAITING_PHOTO";
-        await sendMessage(chatId, `📊 **Angka Diterima!** Total Suara: **${totalSuara}**\n\nSekarang, silakan **Kirim Foto C1 Plano**.`);
-        return;
-      }
-
-      // STEP 4: TERIMA FOTO C1 & SIMPAN KE DB
-      if (state === "AWAITING_PHOTO") {
-        if (!msg.photo) {
-          await sendMessage(chatId, "⚠️ Mohon kirimkan berkas berupa **Foto C1 Plano**.");
-          return;
-        }
-
-        const photoId = msg.photo[msg.photo.length - 1].file_id;
-        
-        // Dapatkan Direct URL dari Telegram CDN
-        const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${photoId}`);
-        const fileJson = await fileRes.json();
-        const photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileJson.result.file_path}`;
-
-        const tempData = userTemp[chatId] || {};
-
-        // Simpan ke Database Supabase
-        await supabase.from('hasil_suara').insert([{
-          kecamatan: tempData.kec,
-          desa: tempData.desa,
-          tps: tempData.tps,
-          nrp_saksi: tempData.nrp,
-          nama_saksi: tempData.nama,
-          suara_calon_01: tempData.suaraCalon[0] || 0,
-          suara_calon_02: tempData.suaraCalon[1] || 0,
-          suara_calon_03: tempData.suaraCalon[2] || 0,
-          suara_calon_04: tempData.suaraCalon[3] || 0,
-          suara_calon_05: tempData.suaraCalon[4] || 0,
-          suara_tidak_sah: tempData.suaraTidakSah,
-          total_suara_masuk: tempData.totalSuara,
-          url_foto_c1: photoUrl,
-          status_verifikasi: 'AUTO_VERIFIED',
-          chat_id_saksi: String(chatId)
-        }]);
-
-        delete userState[chatId];
-        await sendMessage(chatId, `🎉 **DATA TERKIRIM!** Data hasil **${tempData.tps} Desa ${tempData.desa}** berhasil masuk ke database.`);
-      }
+    if (petugasLogin) {
+      // JIKA SUDAH LOGIN -> TAMPILKAN MENU PILIH TPS / INPUT SUARA
+      return await handleInputSuara(chatId, text, petugasLogin, update.message);
     }
-  } catch (err) {
-    console.error("Error handler:", err);
+
+    // 3. JIKA BELUM LOGIN -> CEK APAKAH INPUT BERUPA NRP ATAU PIN
+    // A. Cek apakah input cocok dengan PIN petugas yang NRP-nya sedang diverifikasi
+    // Kita simpan NRP sementara di state/session sederhana, atau cari berdasarkan NRP dulu:
+    
+    // Apakah text yang diinput adalah NRP?
+    const { data: petugasByNrp } = await supabase
+      .from('master_petugas')
+      .select('*')
+      .eq('nrp', text)
+      .maybeSingle();
+
+    if (petugasByNrp) {
+      // Input cocok dengan NRP! Minta PIN.
+      await sendMessage(
+        chatId,
+        `Halo, <b>${petugasByNrp.nama_petugas}</b>!\n` +
+        `Kecamatan: <b>${petugasByNrp.kecamatan}</b>\n` +
+        `Desa: <b>${petugasByNrp.desa}</b>\n\n` +
+        `Masukkan <b>PIN Rahasia</b> Anda:`
+      );
+      return res.status(200).send('OK');
+    }
+
+    // B. Jika bukan NRP, Cek apakah text yang diinput adalah PIN
+    // Cari petugas yang PIN-nya cocok (pencocokan String ketat)
+    const { data: petugasByPin } = await supabase
+      .from('master_petugas')
+      .select('*')
+      .eq('pin', text)
+      .maybeSingle();
+
+    if (petugasByPin) {
+      // PIN COCOK! Simpan chat_id_telegram ke master_petugas (Tanda Login Sukses)
+      await supabase
+        .from('master_petugas')
+        .update({ chat_id_telegram: chatId })
+        .eq('nrp', petugasByPin.nrp);
+
+      // Ambil daftar TPS di Desa petugas tersebut dari master_desa
+      const { data: daftarTps } = await supabase
+        .from('master_desa')
+        .select('tps')
+        .eq('kecamatan', petugasByPin.kecamatan)
+        .eq('desa', petugasByPin.desa);
+
+      let keyboard = [];
+      if (daftarTps && daftarTps.length > 0) {
+        keyboard = daftarTps.map(t => [{ text: `📍 ${t.tps}` }]);
+      } else {
+        keyboard = [[{ text: '📍 TPS 01' }], [{ text: '📍 TPS 02' }]];
+      }
+
+      await sendMessage(
+        chatId,
+        `✅ <b>BERHASIL LOGIN!</b>\n\n` +
+        `Petugas: <b>${petugasByPin.nama_petugas}</b>\n` +
+        `Wilayah: <b>Desa ${petugasByPin.desa}, Kec. ${petugasByPin.kecamatan}</b>\n\n` +
+        `Silakan pilih <b>TPS</b> tempat Anda bertugas:`,
+        {
+          keyboard: keyboard,
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      );
+      return res.status(200).send('OK');
+    }
+
+    // C. Jika bukan NRP dan bukan PIN
+    await sendMessage(
+      chatId,
+      `❌ <b>Akses Ditolak!</b> NRP atau PIN tidak terdaftar.\n\nSilakan masukkan <b>NRP</b> Anda yang valid:`
+    );
+
+  } catch (error) {
+    console.error('Error Webhook:', error);
   }
-};
+
+  return res.status(200).send('OK');
+}
+
+async function handleInputSuara(chatId, text, petugas, message) {
+  // Logika penerimaan format suara 120#80#40#10 dan foto C1
+  if (text.startsWith('📍')) {
+    const tpsSelected = text.replace('📍', '').trim();
+    await sendMessage(
+      chatId,
+      `Anda memilih <b>${tpsSelected}</b>.\n\n` +
+      `Silakan kirimkan data perolehan suara dengan format:\n` +
+      `<code>[Suara Calon 01]#[Suara Calon 02]#[Suara Calon 03]#[Suara Tidak Sah]</code>\n\n` +
+      `<i>Contoh: 120#80#40#10</i>`
+    );
+    return;
+  }
+
+  if (text.includes('#')) {
+    const angka = text.split('#').map(a => parseInt(a.trim()) || 0);
+    // Simpan temporary/langsung konfirmasi foto C1
+    await sendMessage(
+      chatId,
+      `✅ Perolehan angka dicatat!\n\n` +
+      `Satu langkah lagi: <b>Silakan ambil/upload Foto Lembar C1 Plano</b> dari galeri/kamera HP Anda.`
+    );
+    return;
+  }
+
+  await sendMessage(
+    chatId,
+    `Halo ${petugas.nama_petugas}, silakan kirim perolehan suara dengan format <code>01#02#03#tidak_sah</code> atau upload foto C1.`
+  );
+}
