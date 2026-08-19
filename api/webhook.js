@@ -124,7 +124,7 @@ async function logAktivitas({
 }
 
 /* =========================================================
-   OCR BACKGROUND PROCESS (TESSERACT.JS) - DIPERBAIKI
+   OCR BACKGROUND PROCESS (TESSERACT.JS) - FINAL FIX
 ========================================================= */
 
 async function runOCR(imageBuffer) {
@@ -133,9 +133,8 @@ async function runOCR(imageBuffer) {
     let coreVersion = null;
     try { coreVersion = require('tesseract.js-core/package.json').version; } catch (e) {}
     
-    // Konfigurasi lengkap agar memuat file worker dan wasm dari CDN
     worker = await createWorker('eng', 1, {
-      workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/worker.min.js',
+      workerPath: require.resolve('tesseract.js/dist/worker.min.js'), // Menggunakan jalur absolut lokal yang aman untuk Node.js
       corePath: coreVersion ? `https://cdn.jsdelivr.net/npm/tesseract.js-core@${coreVersion}` : 'https://cdn.jsdelivr.net/npm/tesseract.js-core',
       langPath: 'https://tessdata.projectnaptha.com/4.00',
       cachePath: '/tmp'
