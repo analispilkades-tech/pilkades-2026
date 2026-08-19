@@ -672,8 +672,28 @@ export default async function handler(req, res) {
       }
 
       const largestPhoto = message.photo[message.photo.length - 1];
+
+      // Cek apakah foto plano untuk TPS ini sudah pernah diunggah sebelumnya
+      const { data: cekHasil } = await supabase
+        .from('hasil_suara')
+        .select('*')
+        .eq('kecamatan', petugas.kecamatan)
+        .eq('desa', petugas.desa)
+        .eq('tps', petugas.tps_aktif)
+        .maybeSingle();
+
+      if (cekHasil && cekHasil.telegram_photo_file_id) {
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '⚠️ YA, TIMPA / REPLACE FOTO', callback_data: `REPLACE_PLANO_${petugas.tps_aktif}_${largestPhoto.file_id}` }],
+            [{ text: '❌ BATAL', callback_data: 'CANCEL_PLANO' }]
+          ]
+        };
+        await sendMessage(chatId, `⚠️ <b>PERHATIAN</b>\n\nFoto C1 Plano untuk <b>TPS ${petugas.tps_aktif}</b> sudah pernah diunggah sebelumnya.\nApakah Anda ingin mengganti/menimpa foto lama dengan yang baru?`, keyboard);
+        return res.status(200).json({ ok: true });
+      }
+
       await sendMessage(chatId, `📷 Foto C1 Plano TPS ${petugas.tps_aktif} diterima dan sedang diproses di latar belakang.`);
-      
       waitUntil(processPlanoPhotoInBackground(chatId, petugas.tps_aktif, largestPhoto.file_id, petugas));
       return res.status(200).json({ ok: true });
     }
@@ -761,6 +781,21 @@ async function handleCallback(cb) {
 
   const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
   if (!petugas) return;
+
+  if (data.startsWith('REPLACE_PLANO_')) {
+    const parts = data.split('_');
+    const tpsTarget = parts[2];
+    const fileId = parts[3];
+
+    await editMessage(chatId, cb.message.message_id, `🔄 Mengganti foto C1 Plano TPS ${tpsTarget} dengan yang baru...`);
+    waitUntil(processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas));
+    return;
+  }
+
+  if (data === 'CANCEL_PLANO') {
+    await editMessage(chatId, cb.message.message_id, `❌ Unggah foto plano dibatalkan.`);
+    return;
+  }
 
   if (data.startsWith('CONFIRM_VOTE_')) {
     const parts = data.split('_');
