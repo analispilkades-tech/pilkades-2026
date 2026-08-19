@@ -641,6 +641,10 @@ if (ocrUpdateError) {
   );
 }
 
+    console.log(
+  `[OCR] Melanjutkan proses verifikasi ID=${planoUploadId}`
+);
+
     /*
      * =========================================================
      * 10. AMBIL HASIL MANUAL TERBARU
