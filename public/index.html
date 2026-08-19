@@ -68,7 +68,7 @@
       </div>
     </div>
 
-    <!-- Ringkasan Progress TPS & Total Suara vs DPT -->
+    <!-- Ringkasan Progress TPS & Total Suara -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <!-- Progress TPS -->
       <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
@@ -84,7 +84,7 @@
 
       <!-- Total Suara Masuk vs DPT -->
       <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
-        <div class="text-slate-400 text-xs font-semibold uppercase">Total Suara Masuk (Filter Aktif)</div>
+        <div class="text-slate-400 text-xs font-semibold uppercase">Total Suara Masuk</div>
         <div class="flex items-baseline space-x-2 mt-2">
           <span id="suaraCountText" class="text-3xl font-extrabold text-blue-400">0 / 0</span>
           <span id="suaraPercentText" class="text-sm font-bold text-blue-400">(0%)</span>
@@ -95,7 +95,7 @@
       </div>
     </div>
 
-    <!-- KARTU PEROLEHAN SUARA CALON (Hanya tampil bila Filter Desa atau TPS aktif) -->
+    <!-- KARTU PEROLEHAN SUARA CALON (Hanya tampil jika Filter Desa atau TPS aktif) -->
     <div id="calonCardsSection" class="mb-6 hidden">
       <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Perolehan Suara Calon</h3>
       <div id="calonCardsContainer" class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -254,7 +254,7 @@
       const tpsVal = document.getElementById("filterTPS").value.toUpperCase().trim();
       const rowsLimit = parseInt(document.getElementById("rowsPerPage").value, 10) || 10;
 
-      // 1. Filter Master Desa untuk statistik Total TPS & DPT Target
+      // 1. Filter Master Desa untuk statistik Total TPS & DPT
       const dataSourceMaster = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
       const filteredMaster = dataSourceMaster.filter(item => {
         const itemKec = String(item.kecamatan || '').toUpperCase().trim();
@@ -277,7 +277,7 @@
                (tpsVal === "" || itemTps === tpsVal);
       });
 
-      // Urutkan data terbaru di paling atas (Timestamp/ID Descending)
+      // Urutkan data terbaru di paling atas
       filteredResults.sort((a, b) => {
         const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -305,7 +305,11 @@
       const tpsPercent = totalTPSDiperkirakan > 0 ? ((tpsMasuk / totalTPSDiperkirakan) * 100).toFixed(1) : "0.0";
 
       // Total DPT Target berdasarkan Filter
-      const totalDptTarget = filteredMaster.reduce((sum, item) => sum + Number(item.dpt || 0), 0);
+      const totalDptTarget = filteredMaster.reduce((sum, item) => {
+        const dptVal = Number(item.dpt || item.jumlah_dpt || item.dpt_total || 0);
+        return sum + dptVal;
+      }, 0);
+
       const totalSuaraMasuk = filteredResults.reduce((sum, item) => sum + Number(item.total_suara_masuk || 0), 0);
       const suaraPercent = totalDptTarget > 0 ? ((totalSuaraMasuk / totalDptTarget) * 100).toFixed(1) : "0.0";
 
