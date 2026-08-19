@@ -11,6 +11,7 @@ const supabase = createClient(
 );
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const GDRIVE_WEBHOOK_URL = process.env.GDRIVE_WEBHOOK_URL; // URL Web App Google Apps Script
 const MAX_CALON = 5;
 
 /* =========================================================
@@ -139,6 +140,7 @@ async function runOCR(imageBuffer) {
 
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:-/#.',
+      tessedit_pageseg_mode: '6',
       preserve_interword_spaces: '1'
     });
 
@@ -198,6 +200,34 @@ function buildSummaryText(tps, voteObj, jumlahCalon) {
 async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas) {
   try {
     const imageBuffer = await downloadTelegramFile(fileId);
+    
+    // Format filename gambar plano: namakecamatan_namadesa_nomortps.jpg[cite: 1]
+    const cleanKec = String(petugas.kecamatan || 'kec').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const cleanDesa = String(petugas.desa || 'desa').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const cleanTps = String(tpsTarget || '1').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const customFileName = `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;[cite: 1]
+
+    let googleDriveUrl = null;
+    if (GDRIVE_WEBHOOK_URL) {
+      try {
+        const driveRes = await fetch(GDRIVE_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base64Data: imageBuffer.toString('base64'),
+            mimeType: 'image/jpeg',
+            fileName: customFileName[cite: 1]
+          })
+        });
+        const driveJson = await driveRes.json();
+        if (driveJson.success) {
+          googleDriveUrl = driveJson.url;
+        }
+      } catch (e) {
+        console.error("Gagal kirim ke Google Drive:", e);
+      }
+    }
+
     const ocr = await runOCR(imageBuffer);
     
     const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
@@ -209,7 +239,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     if (!dbHasil) {
       const payloadPlano = {
         kecamatan: petugas.kecamatan, desa: petugas.desa, tps: tpsTarget, nrp_saksi: petugas.nrp, nama_saksi: petugas.nama_petugas,
-        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', telegram_photo_file_id: fileId,
+        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', telegram_photo_file_id: fileId, google_drive_url: googleDriveUrl,
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
       };
       await supabase.from('hasil_suara').upsert(payloadPlano, { onConflict: 'kecamatan,desa,tps' });
@@ -222,7 +252,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         desa: petugas.desa,
         tps: tpsTarget,
         data_sesudah: ocrRes,
-        keterangan: `Upload Foto Plano TPS ${tpsTarget} (Belum ada data input manual)`
+        keterangan: `Upload Foto Plano ${customFileName} (Belum ada data input manual)`[cite: 1]
       });
       return;
     }
@@ -236,7 +266,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
 
     if (isMatch) {
       await supabase.from('hasil_suara').update({
-        status_verifikasi: 'AUTO VERIFIED', telegram_photo_file_id: fileId
+        status_verifikasi: 'AUTO VERIFIED', telegram_photo_file_id: fileId, google_drive_url: googleDriveUrl
       }).eq('id', dbHasil.id);
 
       await logAktivitas({
@@ -254,7 +284,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       await sendMessage(chatId, `✅ <b>FOTO PLANO TPS ${escapeHtml(tpsTarget)} TERVERIFIKASI (AUTO VERIFIED)</b>`);
     } else {
       await supabase.from('hasil_suara').update({
-        status_verifikasi: 'PLANO TIDAK SESUAI', telegram_photo_file_id: fileId,
+        status_verifikasi: 'PLANO TIDAK SESUAI', telegram_photo_file_id: fileId, google_drive_url: googleDriveUrl,
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
       }).eq('id', dbHasil.id);
 
@@ -692,11 +722,10 @@ async function handleCallback(cb) {
     const jumlahCalon = mDesa?.jumlah_calon || 2;
     const vote = parseVoteInput(voteText, jumlahCalon).result;
 
-    // Ambil data lama untuk pencatatan log audit
     const { data: existingHasil } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
 
     let statusVerifikasi = 'PLANO BELUM TERUNGGAH';
-    if (existingHasil?.telegram_photo_file_id) {
+    if (existingHasil?.telegram_photo_file_id || existingHasil?.google_drive_url) {
       statusVerifikasi = 'FOTO PLANO BELUM TERVERIFIKASI';
     }
 
@@ -734,7 +763,6 @@ async function handleCallback(cb) {
       return;
     }
 
-    // Catat ke Log Aktivitas
     await logAktivitas({
       jenis_aksi: existingHasil ? 'EDIT_HASIL' : 'KIRIM_HASIL_AWAL',
       nrp_saksi: petugas.nrp,
