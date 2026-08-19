@@ -2,95 +2,262 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Count Pilkades Serempak 2026</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* Animasi log berjalan ke atas secara dinamis */
+    @keyframes slideUp {
+      0% { transform: translateY(100%); opacity: 0; }
+      15% { transform: translateY(0); opacity: 1; }
+      85% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-100%); opacity: 0; }
+    }
+    .animate-log-item {
+      animation: slideUp 4s ease-in-out infinite;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between font-sans">
 
-  <div class="max-w-7xl mx-auto p-6">
-    <!-- Header -->
-    <div class="flex justify-between items-center bg-white p-6 rounded-xl shadow-md mb-6">
+  <!-- Main Container -->
+  <div class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow mb-16">
+    
+    <!-- Header Dasbor -->
+    <div class="flex flex-col md:flex-row justify-between items-center bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl mb-6 gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-blue-900">HITUNG CEPAT PILKADES 2026</h1>
-        <p class="text-gray-500 text-sm">Real-time Data Processing Engine</p>
+        <span class="text-xs font-bold text-blue-400 tracking-widest uppercase">Sistem Informasi Pilkades 2026</span>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-white">REAL-TIME LIVE COUNT PILKADES</h1>
+        <p class="text-xs text-slate-400 mt-1">Sistem Perhitungan Cepat Terintegrasi & Terverifikasi</p>
       </div>
-      <div class="flex items-center space-x-2">
-        <span class="h-3 w-3 bg-green-500 rounded-full animate-ping"></span>
-        <span class="text-sm font-semibold text-green-600">LIVE DATA</span>
+      <div class="flex items-center space-x-3 bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700">
+        <span class="relative flex h-3 w-3">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+        </span>
+        <span class="text-xs font-bold text-emerald-400 tracking-wider">LIVE STREAMING DATA</span>
       </div>
     </div>
 
-    <!-- Filter Kecamatan & Desa -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <select id="filterKec" class="p-3 bg-white border rounded-lg shadow-sm" onchange="filterData()">
-        <option value="">-- Semua Kecamatan --</option>
-      </select>
-      <select id="filterDesa" class="p-3 bg-white border rounded-lg shadow-sm" onchange="filterData()">
-        <option value="">-- Semua Desa --</option>
-      </select>
-      <select id="filterTPS" class="p-3 bg-white border rounded-lg shadow-sm" onchange="filterData()">
-        <option value="">-- Semua TPS (1-3) --</option>
-      </select>
+    <!-- Ringkasan Persentase & Progress TPS -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <!-- Card Progress TPS -->
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+        <div class="text-slate-400 text-xs font-semibold uppercase">Progress TPS Masuk</div>
+        <div class="flex items-baseline space-x-2 mt-2">
+          <span id="tpsCountText" class="text-3xl font-extrabold text-white">0 / 0</span>
+          <span id="tpsPercentText" class="text-sm font-bold text-emerald-400">(0%)</span>
+        </div>
+        <div class="w-full bg-slate-700 rounded-full h-2 mt-3 overflow-hidden">
+          <div id="tpsProgressBar" class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Card Total Suara Sah -->
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+        <div class="text-slate-400 text-xs font-semibold uppercase">Total Suara Masuk</div>
+        <div id="totalSuaraText" class="text-3xl font-extrabold text-blue-400 mt-2">0</div>
+        <span class="text-xs text-slate-500 mt-1 block">Akumulasi Seluruh TPS</span>
+      </div>
+
+      <!-- Card Persentase Calon 01 -->
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+        <div class="text-slate-400 text-xs font-semibold uppercase">Persentase Calon 01</div>
+        <div id="calon1PercentText" class="text-3xl font-extrabold text-indigo-400 mt-2">0%</div>
+        <span id="calon1SuaraText" class="text-xs text-slate-400">0 Suara</span>
+      </div>
+
+      <!-- Card Persentase Calon 02 -->
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+        <div class="text-slate-400 text-xs font-semibold uppercase">Persentase Calon 02</div>
+        <div id="calon2PercentText" class="text-3xl font-extrabold text-amber-400 mt-2">0%</div>
+        <span id="calon2SuaraText" class="text-xs text-slate-400">0 Suara</span>
+      </div>
     </div>
 
-    <!-- Tabel Rapi Data TPS -->
-    <div class="bg-white rounded-xl shadow-md p-6">
-      <h2 class="text-lg font-bold mb-4">Log Masuk TPS & Hasil Suara</h2>
+    <!-- Tabel Detail Log TPS -->
+    <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-6">
+      <h2 class="text-lg font-bold text-white mb-4 flex items-center space-x-2">
+        <span>📋 Rincian Perolehan Suara TPS</span>
+      </h2>
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+        <table class="w-full text-left text-sm border-collapse">
           <thead>
-            <tr class="bg-gray-50 border-b">
+            <tr class="bg-slate-900/50 text-slate-400 border-b border-slate-700">
               <th class="p-3">Kecamatan</th>
               <th class="p-3">Desa</th>
               <th class="p-3">TPS</th>
-              <th class="p-3">Petugas</th>
-              <th class="p-3">Total Suara</th>
-              <th class="p-3">Status</th>
+              <th class="p-3">Petugas (NRP)</th>
+              <th class="p-3 text-center">Calon 01</th>
+              <th class="p-3 text-center">Calon 02</th>
+              <th class="p-3 text-center">Tidak Sah</th>
+              <th class="p-3 text-center">Total Suara</th>
+              <th class="p-3 text-center">Status</th>
             </tr>
           </thead>
-          <tbody id="tableBody">
-            <!-- Data dimasukkan secara otomatis via JavaScript -->
+          <tbody id="tableBody" class="divide-y divide-slate-700/50 text-slate-300">
+            <tr>
+              <td colspan="9" class="text-center py-8 text-slate-500">Memuat data live count...</td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
+
   </div>
 
-  <script>
-    const API_URL = "URL_WEB_APP_GAS_ANDA_DI_SINI";
+  <!-- FOOTER CONTAINER: Running Log Activity (Satu baris bergerak dinamis ke atas) -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-4 py-3 z-50">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      
+      <!-- Label Kiri -->
+      <div class="flex items-center space-x-2 bg-blue-950 text-blue-400 border border-blue-800 px-3 py-1 rounded-md text-xs font-bold shrink-0 mr-4">
+        <span class="animate-pulse">⚡</span>
+        <span>LOG AKTIVITAS:</span>
+      </div>
 
-    async function loadData() {
+      <!-- Box Teks Berjalan Vertical -->
+      <div class="relative h-6 overflow-hidden flex-grow">
+        <div id="logTicker" class="absolute w-full h-full flex items-center text-xs md:text-sm font-medium text-emerald-300">
+          <span class="text-slate-500">Menunggu kiriman data terbaru dari TPS...</span>
+        </div>
+      </div>
+
+      <!-- Indikator Waktu -->
+      <div id="clockText" class="text-xs text-slate-500 font-mono hidden md:block shrink-0 ml-4">
+        00:00:00 WIB
+      </div>
+
+    </div>
+  </footer>
+
+  <script>
+    // MASUKKAN URL DEPLOYMENT APPS SCRIPT ANDA DI SINI
+    const API_URL = "URL_WEB_APP_GAS_ANDA_DI_SINI";
+    
+    let previousDataLength = 0;
+    let logIndex = 0;
+    let logList = [];
+
+    async function loadLiveData() {
       try {
-        const response = await fetch(API_URL);
+        const response = await fetch(API_URL + "?action=getAuditData");
         const data = await response.json();
-        renderTable(data);
+        
+        // Filter hanya data yang terverifikasi / masuk
+        const validData = data.filter(d => d.Status_Verifikasi !== 'REJECTED');
+        
+        renderDashboardStats(validData);
+        renderTable(validData);
+        updateLogList(validData);
       } catch (err) {
-        console.error("Gagal mengambil data:", err);
+        console.error("Gagal memperbarui data live count:", err);
       }
     }
 
+    // Perhitungan Statistik & Persentase Suara
+    function renderDashboardStats(data) {
+      const totalTPSDiperkirakan = 50; // Sesuaikan dengan total seluruh TPS
+      const tpsMasuk = data.length;
+      const tpsPercent = ((tpsMasuk / totalTPSDiperkirakan) * 100).toFixed(1);
+
+      let c1Suara = 0;
+      let c2Suara = 0;
+      let totalSuaraMasuk = 0;
+
+      data.forEach(item => {
+        c1Suara += Number(item.Suara_Calon_01 || 0);
+        c2Suara += Number(item.Suara_Calon_02 || 0);
+        totalSuaraMasuk += Number(item.Total_Suara_Masuk || 0);
+      });
+
+      const c1Percent = totalSuaraMasuk > 0 ? ((c1Suara / totalSuaraMasuk) * 100).toFixed(1) : 0;
+      const c2Percent = totalSuaraMasuk > 0 ? ((c2Suara / totalSuaraMasuk) * 100).toFixed(1) : 0;
+
+      // Update UI Progress TPS
+      document.getElementById("tpsCountText").innerText = `${tpsMasuk} / ${totalTPSDiperkirakan}`;
+      document.getElementById("tpsPercentText").innerText = `(${tpsPercent}%)`;
+      document.getElementById("tpsProgressBar").style.width = `${tpsPercent}%`;
+
+      // Update UI Suara Total
+      document.getElementById("totalSuaraText").innerText = totalSuaraMasuk.toLocaleString('id-ID');
+
+      // Update UI Persentase Calon
+      document.getElementById("calon1PercentText").innerText = `${c1Percent}%`;
+      document.getElementById("calon1SuaraText").innerText = `${c1Suara.toLocaleString('id-ID')} Suara`;
+
+      document.getElementById("calon2PercentText").innerText = `${c2Percent}%`;
+      document.getElementById("calon2SuaraText").innerText = `${c2Suara.toLocaleString('id-ID')} Suara`;
+    }
+
+    // Render Tabel TPS
     function renderTable(data) {
       const tbody = document.getElementById("tableBody");
       tbody.innerHTML = "";
-      
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500">Belum ada data TPS yang masuk.</td></tr>`;
+        return;
+      }
+
       data.forEach(item => {
         tbody.innerHTML += `
-          <tr class="border-b hover:bg-gray-50">
+          <tr class="hover:bg-slate-700/30 transition">
             <td class="p-3">${item.Kecamatan}</td>
-            <td class="p-3 font-semibold">${item.Desa}</td>
-            <td class="p-3">${item.TPS}</td>
-            <td class="p-3">${item.Nama_Saksi} (${item.NRP_Saksi})</td>
-            <td class="p-3 font-bold text-blue-600">${item.Total_Suara_Masuk}</td>
-            <td class="p-3"><span class="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-bold">${item.Status_Verifikasi}</span></td>
+            <td class="p-3 font-semibold text-white">${item.Desa}</td>
+            <td class="p-3 font-bold text-blue-400">${item.TPS}</td>
+            <td class="p-3">${item.Nama_Saksi} <span class="text-slate-500 text-xs">(${item.NRP_Saksi})</span></td>
+            <td class="p-3 text-center font-bold text-indigo-400">${item.Suara_Calon_01}</td>
+            <td class="p-3 text-center font-bold text-amber-400">${item.Suara_Calon_02}</td>
+            <td class="p-3 text-center text-rose-400">${item.Suara_Tidak_Sah}</td>
+            <td class="p-3 text-center font-extrabold text-white">${item.Total_Suara_Masuk}</td>
+            <td class="p-3 text-center">
+              <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold">
+                ${item.Status_Verifikasi}
+              </span>
+            </td>
           </tr>
         `;
       });
     }
 
-    // Auto update tiap 5 detik (5000 ms)
-    setInterval(loadData, 5000);
-    loadData();
+    // Memperbarui Daftar Log untuk Footer Running Text Vertical
+    function updateLogList(data) {
+      logList = data.map(item => {
+        return `📩 <strong>SUARA MASUK:</strong> ${item.TPS} Desa ${item.Desa} (${item.Kecamatan}) • Total: <strong>${item.Total_Suara_Masuk} Suara</strong> • Petugas: <strong>${item.Nama_Saksi}</strong> [NRP: ${item.NRP_Saksi}]`;
+      });
+    }
+
+    // Rotasi Teks Log Berjalan ke Atas secara Dinamis
+    function rotateLogTicker() {
+      const tickerContainer = document.getElementById("logTicker");
+      if (logList.length === 0) return;
+
+      const currentLog = logList[logIndex];
+      
+      // Efek animasi ganti teks
+      tickerContainer.classList.remove("animate-log-item");
+      void tickerContainer.offsetWidth; // Trigger reflow
+      tickerContainer.innerHTML = currentLog;
+      tickerContainer.classList.add("animate-log-item");
+
+      logIndex = (logIndex + 1) % logList.length;
+    }
+
+    // Jam Digital Footer
+    function updateClock() {
+      const now = new Date();
+      document.getElementById("clockText").innerText = now.toLocaleTimeString('id-ID') + " WIB";
+    }
+
+    // Interval Pengaturan
+    setInterval(loadLiveData, 5000); // Tarik data baru tiap 5 detik
+    setInterval(rotateLogTicker, 4000); // Ganti teks log tiap 4 detik
+    setInterval(updateClock, 1000); // Jam digital
+
+    // Load Pertama
+    loadLiveData();
   </script>
 </body>
 </html>
