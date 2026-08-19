@@ -344,52 +344,13 @@ export default async function handler(req, res) {
     const text = message.text ? String(message.text).trim() : '';
     const command = commandOf(text);
 
-    // 1. CEK APAKAH ADA PENGGUNA YANG SEDANG DALAM STATUS MENUNGGU PIN (WAIT_CHATID)
-    const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
-    if (waitUser) {
-      if (command === '/batal' || command.startsWith('/batal@')) {
-        await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('id', waitUser.id);
-        await removeKeyboard(chatId, `✅ Proses dibatalkan.\nKetik /start untuk kembali.`);
-        return res.status(200).json({ ok: true });
-      }
-
-      // Verifikasi PIN
-      if (text === String(waitUser.pin ?? '').trim()) {
-        // PERBAIKAN UTAMA: Set chat_id murni agar status WAIT_ hilang selamanya
-        await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
-
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_SUKSES',
-          nrp_saksi: waitUser.nrp,
-          nama_saksi: waitUser.nama_petugas,
-          kecamatan: waitUser.kecamatan,
-          desa: waitUser.desa,
-          keterangan: `Registrasi akun Telegram petugas ${waitUser.nama_petugas} (${waitUser.nrp}) berhasil`
-        });
-
-        const msg = `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang,\n<b>${escapeHtml(waitUser.nama_petugas)}</b>\n\n` +
-          `📍 Kecamatan : <b>${escapeHtml(waitUser.kecamatan)}</b>\n🏘 Desa : <b>${escapeHtml(waitUser.desa)}</b>\n\n` +
-          `Untuk melaporkan hasil penghitungan suara:\n/kirimhasil`;
-        await removeKeyboard(chatId, msg);
-      } else {
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_PIN_SALAH',
-          nrp_saksi: waitUser.nrp,
-          nama_saksi: waitUser.nama_petugas,
-          kecamatan: waitUser.kecamatan,
-          desa: waitUser.desa,
-          keterangan: `PIN salah dimasukkan oleh NRP ${waitUser.nrp}`
-        });
-
-        await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
-      }
-      return res.status(200).json({ ok: true });
-    }
-
-    // 2. AMBIL DATA PETUGAS YANG SUDAH TERDAFTAR NORMAL
-    const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
-
+    // =========================================================================
+    // PRIORITAS UTAMA: JIKA PERINTAH GLOBAL (/start, /help, /batal), BERSIHKAN SESI
+    // =========================================================================
     if (command === '/start' || command.startsWith('/start@')) {
+      await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
+      
+      const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
       if (petugas) {
         const msg = `👤 <b>ANDA SUDAH TERDAFTAR</b>\n\n` +
           `Nama : <b>${escapeHtml(petugas.nama_petugas)}</b>\n` +
@@ -421,6 +382,64 @@ export default async function handler(req, res) {
       await sendMessage(chatId, msg);
       return res.status(200).json({ ok: true });
     }
+
+    if (command === '/batal' || command.startsWith('/batal@')) {
+      await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
+      const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
+      if (petugas) {
+        await supabase.from('master_petugas').update({ mode_input: null, tps_aktif: null }).eq('id', petugas.id);
+        await logAktivitas({
+          jenis_aksi: 'BATAL_PROSES',
+          nrp_saksi: petugas.nrp,
+          nama_saksi: petugas.nama_petugas,
+          kecamatan: petugas.kecamatan,
+          desa: petugas.desa,
+          tps: petugas.tps_aktif,
+          keterangan: `Petugas membatalkan alur perintah`
+        });
+      }
+      await removeKeyboard(chatId, `✅ Proses dibatalkan.\nKetik /start untuk kembali.`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // =========================================================================
+    // CEK APAKAH ADA PENGGUNA YANG SEDANG DALAM STATUS MENUNGGU PIN (WAIT_CHATID)
+    // =========================================================================
+    const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
+    if (waitUser) {
+      if (text === String(waitUser.pin ?? '').trim()) {
+        await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
+
+        await logAktivitas({
+          jenis_aksi: 'REGISTRASI_SUKSES',
+          nrp_saksi: waitUser.nrp,
+          nama_saksi: waitUser.nama_petugas,
+          kecamatan: waitUser.kecamatan,
+          desa: waitUser.desa,
+          keterangan: `Registrasi akun Telegram petugas ${waitUser.nama_petugas} (${waitUser.nrp}) berhasil`
+        });
+
+        const msg = `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang,\n<b>${escapeHtml(waitUser.nama_petugas)}</b>\n\n` +
+          `📍 Kecamatan : <b>${escapeHtml(waitUser.kecamatan)}</b>\n🏘 Desa : <b>${escapeHtml(waitUser.desa)}</b>\n\n` +
+          `Untuk melaporkan hasil penghitungan suara:\n/kirimhasil`;
+        await removeKeyboard(chatId, msg);
+      } else {
+        await logAktivitas({
+          jenis_aksi: 'REGISTRASI_PIN_SALAH',
+          nrp_saksi: waitUser.nrp,
+          nama_saksi: waitUser.nama_petugas,
+          kecamatan: waitUser.kecamatan,
+          desa: waitUser.desa,
+          keterangan: `PIN salah dimasukkan oleh NRP ${waitUser.nrp}`
+        });
+
+        await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    // AMBIL DATA PETUGAS YANG SUDAH TERDAFTAR NORMAL
+    const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
 
     if (command === '/reg' || command.startsWith('/reg@')) {
       if (petugas) {
@@ -459,23 +478,6 @@ export default async function handler(req, res) {
       });
 
       await sendMessage(chatId, `✅ <b>NRP TERVERIFIKASI</b>\n\nHalo <b>${escapeHtml(masterP.nama_petugas)}</b>.\n\nNRP Anda berhasil ditemukan dalam database.\n\nSilakan masukkan <b>PIN Rahasia</b> Anda.\n\nJika ingin membatalkan:\n/batal`);
-      return res.status(200).json({ ok: true });
-    }
-
-    if (command === '/batal' || command.startsWith('/batal@')) {
-      if (petugas) {
-        await supabase.from('master_petugas').update({ mode_input: null }).eq('id', petugas.id);
-        await logAktivitas({
-          jenis_aksi: 'BATAL_PROSES',
-          nrp_saksi: petugas.nrp,
-          nama_saksi: petugas.nama_petugas,
-          kecamatan: petugas.kecamatan,
-          desa: petugas.desa,
-          tps: petugas.tps_aktif,
-          keterangan: `Petugas membatalkan alur perintah`
-        });
-      }
-      await removeKeyboard(chatId, `✅ Proses dibatalkan.\nKetik /start untuk kembali.`);
       return res.status(200).json({ ok: true });
     }
 
