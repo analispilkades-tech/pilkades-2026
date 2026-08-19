@@ -3,214 +3,187 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel Verifikasi & Second Audit - Pilkades Serempak Kab. Wonosobo 2026</title>
+  <title>Panel Admin & Audit Pilkades 2026</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    // Proteksi Halaman Admin (Route Guard)
-    const token = localStorage.getItem("adminToken");
-    if (!token) {
-      window.location.href = "/login";
-    }
-
-    function handleLogout() {
-      localStorage.removeItem("adminToken");
-      localStorage.removeItem("adminNama");
-      window.location.href = "/login";
-    }
-  </script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col justify-between">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between font-sans">
 
-  <div>
-    <!-- Header Admin -->
-    <header class="bg-slate-900 text-white p-4 shadow-lg">
-      <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 class="text-xl font-bold">PANEL AUDIT & VERIFIKASI C1</h1>
-          <p class="text-xs text-slate-400">Khusus Verifikator Internal Polres Wonosobo</p>
-        </div>
-        
-        <div class="flex items-center space-x-4">
-          <div class="bg-amber-500/20 border border-amber-500 text-amber-300 px-3 py-1.5 rounded-full text-xs font-semibold">
-            <span id="pendingCount">0</span> TPS Membutuhkan Audit
-          </div>
-          
-          <div class="flex items-center space-x-3 border-l border-slate-700 pl-4">
-            <span class="text-xs text-slate-300">Logged as: <strong id="userDisplay" class="text-white">Admin</strong></span>
-            <button onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">
-              Keluar (Logout)
-            </button>
-          </div>
-        </div>
+  <!-- Header -->
+  <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-lg">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div>
+        <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">Polres Wonosobo</span>
+        <h1 class="text-xl font-extrabold text-white">PANEL AUDIT & VERIFIKASI C1</h1>
       </div>
-    </header>
-
-    <main class="max-w-7xl mx-auto p-4 md:p-6">
-      <!-- Filter Status -->
-      <div class="flex flex-wrap gap-2 mb-6">
-        <button onclick="filterStatus('NEEDS_AUDIT')" class="px-4 py-2 bg-amber-600 text-white font-medium rounded-lg shadow hover:bg-amber-700 text-sm">
-          ⚠️ Perlu Audit (Pending)
-        </button>
-        <button onclick="filterStatus('AUTO_VERIFIED')" class="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 text-sm">
-          ✅ Auto Verified
-        </button>
-        <button onclick="filterStatus('ALL')" class="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 text-sm">
-          📋 Semua Data TPS
+      <div class="flex items-center space-x-4">
+        <span id="adminNameDisplay" class="text-xs text-slate-300 font-mono hidden md:inline">Logged as: Admin</span>
+        <button onclick="logoutAdmin()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+          Keluar (Logout)
         </button>
       </div>
+    </div>
+  </header>
 
-      <!-- Container Utama (Sanding Data) -->
-      <div id="auditContainer" class="space-y-6">
-        <div class="text-center py-12 text-slate-500">Memuat data verifikasi...</div>
+  <!-- Container Utama -->
+  <div class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow">
+    
+    <!-- Tab Navigasi & Filter Status -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <button onclick="setFilterStatus('PENDING')" id="tabPending" class="bg-slate-800 hover:bg-slate-700 border border-amber-500/50 p-4 rounded-xl text-left transition shadow-md">
+        <div class="text-xs text-amber-400 font-semibold uppercase">⚠️ Perlu Audit / Review</div>
+        <div id="countPending" class="text-2xl font-extrabold text-white mt-1">0 TPS</div>
+      </button>
+
+      <button onclick="setFilterStatus('VERIFIED')" id="tabVerified" class="bg-slate-800 hover:bg-slate-700 border border-emerald-500/50 p-4 rounded-xl text-left transition shadow-md">
+        <div class="text-xs text-emerald-400 font-semibold uppercase">✅ Terverifikasi / Sah</div>
+        <div id="countVerified" class="text-2xl font-extrabold text-white mt-1">0 TPS</div>
+      </button>
+
+      <button onclick="setFilterStatus('ALL')" id="tabAll" class="bg-slate-800 hover:bg-slate-700 border border-blue-500/50 p-4 rounded-xl text-left transition shadow-md">
+        <div class="text-xs text-blue-400 font-semibold uppercase">📋 Semua Data Livecount</div>
+        <div id="countAll" class="text-2xl font-extrabold text-white mt-1">0 TPS</div>
+      </button>
+    </div>
+
+    <!-- Tabel Data Interaktif -->
+    <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-6">
+      <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+        <h2 id="tableTitle" class="text-lg font-bold text-white">Daftar Data Masuk</h2>
+        <input type="text" id="searchQuery" oninput="applyTableFilter()" placeholder="Cari Desa / Kecamatan / Petugas..." class="p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500">
       </div>
-    </main>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm border-collapse">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-400 border-b border-slate-700">
+              <th class="p-3">Lokasi (Kec / Desa / TPS)</th>
+              <th class="p-3">Petugas</th>
+              <th class="p-3 text-center">C1 / C2 / Dst</th>
+              <th class="p-3 text-center">Total</th>
+              <th class="p-3 text-center">Status</th>
+              <th class="p-3 text-center">Aksi / Foto</th>
+            </tr>
+          </thead>
+          <tbody id="adminTableBody" class="divide-y divide-slate-700/50 text-slate-300">
+            <tr><td colspan="6" class="text-center py-8 text-slate-500">Memuat data audit...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Footer Copyright Admin -->
-  <footer class="mt-12 py-6 border-t border-slate-200 text-center text-xs text-slate-500 bg-white">
-    <p>&copy; 2026 brengos ntd. All Rights Reserved.</p>
-    <p class="mt-1 text-slate-400">Sistem Perhitungan Cepat & Audit C1 Terintegrasi</p>
+  <!-- Footer -->
+  <footer class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+    <p>&copy; 2026 brengos ntd. Sistem Pengamanan & Audit Pilkades Polres Wonosobo.</p>
   </footer>
 
   <script>
-    document.getElementById("userDisplay").innerText = localStorage.getItem("adminNama") || "Admin";
+    let globalData = [];
+    let currentFilter = 'PENDING'; // Default menampilkan yang perlu audit
 
-    const GET_DATA_URL = "/api/get-data";
-    const ACTION_URL = "/api/admin-action";
-    let allData = [];
+    document.addEventListener("DOMContentLoaded", () => {
+      const adminNama = localStorage.getItem("adminNama") || "Admin";
+      document.getElementById("adminNameDisplay").innerText = `Logged as: ${adminNama}`;
+      fetchAdminData();
+      setInterval(fetchAdminData, 10000); // Auto-refresh tiap 10 detik
+    });
 
-    async function loadAuditData() {
+    async function fetchAdminData() {
       try {
-        const res = await fetch(GET_DATA_URL);
-        allData = await res.json();
-        filterStatus('NEEDS_AUDIT');
+        const res = await fetch('/api/get-data');
+        const result = await res.json();
+        globalData = result.data || result || [];
+        
+        updateTabCounts();
+        applyTableFilter();
       } catch (err) {
-        console.error("Gagal mengambil data audit:", err);
+        console.error("Gagal memuat data admin:", err);
       }
     }
 
-    function filterStatus(status) {
-      const container = document.getElementById("auditContainer");
-      container.innerHTML = "";
+    function setFilterStatus(status) {
+      currentFilter = status;
+      applyTableFilter();
+    }
 
-      let filtered = allData;
-      if (status !== 'ALL') {
-        filtered = allData.filter(d => d.status_verifikasi === status);
-      }
+    function updateTabCounts() {
+      const pendingCount = globalData.filter(d => ['PLANO TIDAK SESUAI', 'FOTO PLANO BELUM TERVERIFIKASI', 'MEMERLUKAN VERIFIKASI ADMIN'].includes(d.status_verifikasi)).length;
+      const verifiedCount = globalData.filter(d => ['AUTO VERIFIED', 'AUTO_VERIFIED', 'EDITED_BY_SAKSI'].includes(d.status_verifikasi)).length;
+      
+      document.getElementById("countPending").innerText = `${pendingCount} TPS`;
+      document.getElementById("countVerified").innerText = `${verifiedCount} TPS`;
+      document.getElementById("countAll").innerText = `${globalData.length} TPS`;
+    }
 
-      document.getElementById("pendingCount").innerText = allData.filter(d => d.status_verifikasi === 'NEEDS_AUDIT').length;
+    function applyTableFilter() {
+      const search = document.getElementById("searchQuery").value.toLowerCase();
+      
+      let filtered = globalData.filter(item => {
+        const matchSearch = String(item.desa || '').toLowerCase().includes(search) ||
+                            String(item.kecamatan || '').toLowerCase().includes(search) ||
+                            String(item.nama_saksi || '').toLowerCase().includes(search);
+        
+        if (!matchSearch) return false;
 
-      if (filtered.length === 0) {
-        container.innerHTML = `<div class="bg-white p-8 rounded-xl shadow text-center text-slate-500">
-          🎉 Tidak ada data TPS yang memerlukan verifikasi manual saat ini.
-        </div>`;
+        if (currentFilter === 'PENDING') {
+          return ['PLANO TIDAK SESUAI', 'FOTO PLANO BELUM TERVERIFIKASI', 'MEMERLUKAN VERIFIKASI ADMIN'].includes(item.status_verifikasi);
+        } else if (currentFilter === 'VERIFIED') {
+          return ['AUTO VERIFIED', 'AUTO_VERIFIED', 'EDITED_BY_SAKSI'].includes(item.status_verifikasi);
+        }
+        return true; // ALL
+      });
+
+      renderAdminTable(filtered);
+    }
+
+    function renderAdminTable(data) {
+      const tbody = document.getElementById("adminTableBody");
+      tbody.innerHTML = "";
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">Tidak ada data dalam kategori ini.</td></tr>`;
         return;
       }
 
-      filtered.forEach(item => {
-        container.innerHTML += `
-          <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden grid grid-cols-1 md:grid-cols-2">
-            <!-- SISI KIRI: Foto C1 Plano -->
-            <div class="p-4 bg-slate-900 flex flex-col justify-center items-center">
-              <span class="text-xs text-slate-400 mb-2">Foto C1 Plano dari Saksi</span>
-              <a href="${item.url_foto_c1}" target="_blank" title="Klik untuk memperbesar">
-                <img src="${item.url_foto_c1}" alt="Foto C1 TPS" class="max-h-96 object-contain rounded border border-slate-700 hover:opacity-90 transition">
-              </a>
-              <span class="text-xs text-slate-500 mt-2">Klik gambar untuk melihat resolusi penuh</span>
-            </div>
+      data.forEach(item => {
+        const photoLink = item.google_drive_url 
+          ? `<a href="${item.google_drive_url}" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold inline-block">📁 Lihat Foto</a>`
+          : '<span class="text-slate-500 text-xs">Tanpa Foto</span>';
 
-            <!-- SISI KANAN: Perbandingan Angka & Aksi -->
-            <div class="p-6 flex flex-col justify-between">
-              <div>
-                <div class="flex justify-between items-start mb-4">
-                  <div>
-                    <span class="text-xs font-bold text-blue-600 uppercase tracking-wide">${item.kecamatan} • ${item.desa}</span>
-                    <h3 class="text-xl font-extrabold text-slate-800">${item.tps}</h3>
-                    <p class="text-xs text-slate-500">Saksi: ${item.nama_saksi} (NRP: ${item.nrp_saksi})</p>
-                  </div>
-                  <span class="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-xs font-bold">
-                    ${item.status_verifikasi}
-                  </span>
-                </div>
-
-                <!-- Tabel Perolehan Suara (Hingga 5 Calon) -->
-                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 mb-4 space-y-2">
-                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
-                    <span>Suara Calon 01:</span>
-                    <span class="font-bold text-slate-800">${item.suara_calon_01 || 0}</span>
-                  </div>
-                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
-                    <span>Suara Calon 02:</span>
-                    <span class="font-bold text-slate-800">${item.suara_calon_02 || 0}</span>
-                  </div>
-                  ${item.suara_calon_03 ? `
-                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
-                    <span>Suara Calon 03:</span>
-                    <span class="font-bold text-slate-800">${item.suara_calon_03}</span>
-                  </div>` : ''}
-                  ${item.suara_calon_04 ? `
-                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
-                    <span>Suara Calon 04:</span>
-                    <span class="font-bold text-slate-800">${item.suara_calon_04}</span>
-                  </div>` : ''}
-                  ${item.suara_calon_05 ? `
-                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
-                    <span>Suara Calon 05:</span>
-                    <span class="font-bold text-slate-800">${item.suara_calon_05}</span>
-                  </div>` : ''}
-                  <div class="flex justify-between text-sm py-1 border-b border-slate-200 text-red-600">
-                    <span>Suara Tidak Sah:</span>
-                    <span class="font-bold">${item.suara_tidak_sah || 0}</span>
-                  </div>
-                  <div class="flex justify-between text-base py-1 font-extrabold text-blue-900">
-                    <span>Total Suara Masuk:</span>
-                    <span>${item.total_suara_masuk || 0}</span>
-                  </div>
-                </div>
-
-                <div class="text-xs bg-amber-50 text-amber-800 p-3 rounded border border-amber-200 mb-4">
-                  📌 <strong>Catatan Audit:</strong> Pastikan angka perolehan suara pada tabel di atas cocok dengan berkas foto C1 Plano di sebelah kiri.
-                </div>
-              </div>
-
-              <!-- Tombol Keputusan Admin -->
-              <div class="flex space-x-3 pt-4 border-t border-slate-100">
-                <button onclick="updateStatus('${item.kecamatan}', '${item.desa}', '${item.tps}', 'VERIFIED')" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow text-sm transition">
-                  ✅ Sahkan Data
-                </button>
-                <button onclick="updateStatus('${item.kecamatan}', '${item.desa}', '${item.tps}', 'REJECTED')" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow text-sm transition">
-                  ❌ Tolak & Minta Revisi
-                </button>
-              </div>
-            </div>
-          </div>
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-700/30 transition">
+            <td class="p-3">
+              <strong class="text-white">${item.desa || '-'}</strong><br>
+              <span class="text-xs text-slate-400">Kec. ${item.kecamatan || '-'} • TPS ${item.tps || '-'}</span>
+            </td>
+            <td class="p-3 text-xs">
+              ${item.nama_saksi || '-'}<br>
+              <span class="text-slate-500">NRP: ${item.nrp_saksi || '-'}</span>
+            </td>
+            <td class="p-3 text-center font-mono text-xs">
+              01: ${item.suara_calon_01 || 0} | 02: ${item.suara_calon_02 || 0}
+              ${item.suara_calon_03 !== null && item.suara_calon_03 !== undefined ? `| 03: ${item.suara_calon_03}` : ''}
+              <br><span class="text-slate-500">Tidak Sah: ${item.suara_tidak_sah || 0}</span>
+            </td>
+            <td class="p-3 text-center font-bold text-white">${item.total_suara_masuk || 0}</td>
+            <td class="p-3 text-center">
+              <span class="px-2 py-1 bg-slate-700 text-amber-400 rounded text-xs font-bold">
+                ${item.status_verifikasi || 'PENDING'}
+              </span>
+            </td>
+            <td class="p-3 text-center space-y-1">
+              ${photoLink}
+            </td>
+          </tr>
         `;
       });
     }
 
-    async function updateStatus(kecamatan, desa, tps, newStatus) {
-      if (!confirm(`Konfirmasi perubahan status ${tps} Desa ${desa} menjadi ${newStatus}?`)) return;
-
-      try {
-        const res = await fetch(ACTION_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "updateStatus", kecamatan: kecamatan, desa: desa, tps: tps, status: newStatus })
-        });
-        
-        if (res.ok) {
-          alert(`Status ${tps} Desa ${desa} berhasil diperbarui!`);
-          loadAuditData(); // Refresh tampilan
-        } else {
-          alert("Gagal memperbarui status data.");
-        }
-      } catch (err) {
-        alert("Terjadi kesalahan koneksi ke server.");
-      }
+    function logoutAdmin() {
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("adminNama");
+      window.location.href = "/login";
     }
-
-    // Load data awal
-    loadAuditData();
   </script>
 </body>
 </html>
