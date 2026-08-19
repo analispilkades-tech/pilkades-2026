@@ -1,4 +1,3 @@
-import https from 'https';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -8,71 +7,56 @@ const supabase = createClient(
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-// Agent HTTPS untuk menjaga koneksi TLS di lingkungan Serverless Vercel
-const agent = new https.Agent({
-  keepAlive: true,
-  rejectUnauthorized: true
-});
+// Helper sendMessage yang tahan banting (Fail-Safe Fetch dengan Timeout 5 detik)
+async function sendMessage(chatId, text, replyMarkup = null) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-// Fungsi sendMessage menggunakan modul HTTPS native Node.js (Solusi TypeError: fetch failed)
-function sendMessage(chatId, text, replyMarkup = null) {
-  return new Promise((resolve) => {
-    const payload = JSON.stringify({
-      chat_id: chatId,
-      text: text,
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup
-    });
+  const payload = {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'HTML'
+  };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
 
-    const options = {
-      hostname: 'api.telegram.org',
-      port: 443,
-      path: `/bot${BOT_TOKEN}/sendMessage`,
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload)
-      },
-      agent: agent,
-      timeout: 8000
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => { resolve(data); });
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
-
-    req.on('error', (e) => {
-      console.error('Error SendMessage (HTTPS):', e.message);
-      resolve(null);
-    });
-
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.write(payload);
-    req.end();
-  });
+    clearTimeout(timeoutId);
+    return await response.json();
+  } catch (e) {
+    console.error('Error SendMessage:', e.message);
+    return null;
+  }
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(200).send('OK');
+  // 1. Terima Method POST
+  if (req.method !== 'POST') {
+    return res.status(200).send('API Webhook Pilkades Active');
+  }
 
-  // Berikan respon HTTP 200 OK secara cepat ke Telegram
+  // 2. Kirim respon HTTP 200 OK secara INSTAN ke Telegram agar tidak timeout
   res.status(200).json({ ok: true });
 
-  const update = req.body;
-  if (!update || !update.message) return;
-
-  const chatId = String(update.message.chat.id);
-  const text = update.message.text ? update.message.text.trim() : '';
-
   try {
+    // 3. Parse Body dengan Aman
+    let update = req.body;
+    if (typeof update === 'string') {
+      update = JSON.parse(update);
+    }
+
+    if (!update || !update.message) return;
+
+    const chatId = String(update.message.chat.id);
+    const text = update.message.text ? update.message.text.trim() : '';
+
     // ===================================================
-    // 1. COMMAND /start (Sama sekali tidak menggunakan Supabase)
+    // 1. COMMAND /start (Murni String, Tanpa DB)
     // ===================================================
     if (text === '/start') {
       await sendMessage(
@@ -99,7 +83,6 @@ export default async function handler(req, res) {
         return;
       }
 
-      // Cek NRP di database
       const { data: petugas, error: errSearch } = await supabase
         .from('master_petugas')
         .select('*')
@@ -114,7 +97,6 @@ export default async function handler(req, res) {
         return;
       }
 
-      // Simpan chat_id_telegram secara langsung sebagai status menunggu PIN
       await supabase
         .from('master_petugas')
         .update({ chat_id_telegram: `WAIT_${chatId}` })
@@ -131,7 +113,6 @@ export default async function handler(req, res) {
     // ===================================================
     // 3. PROSES VERIFIKASI PIN
     // ===================================================
-    // Cek apakah ada petugas dengan status WAIT_chatId
     const { data: petugasWait } = await supabase
       .from('master_petugas')
       .select('*')
@@ -140,7 +121,6 @@ export default async function handler(req, res) {
 
     if (petugasWait) {
       if (text === String(petugasWait.pin).trim()) {
-        // PIN Benar: Aktifkan Chat ID resmi
         await supabase
           .from('master_petugas')
           .update({ chat_id_telegram: chatId })
@@ -163,7 +143,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Ambil akun petugas yang sudah aktif
+    // Ambil akun petugas aktif
     const { data: petugasLogin } = await supabase
       .from('master_petugas')
       .select('*')
@@ -322,6 +302,6 @@ export default async function handler(req, res) {
     );
 
   } catch (err) {
-    console.error('Error Webhook:', err);
+    console.error('Error Webhook Handler:', err);
   }
 }
