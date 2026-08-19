@@ -1,3 +1,4 @@
+import https from 'https';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -7,23 +8,54 @@ const supabase = createClient(
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-async function sendMessage(chatId, text, replyMarkup = null) {
-  const payload = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: 'HTML'
-  };
-  if (replyMarkup) payload.reply_markup = replyMarkup;
+// Agent HTTPS untuk menjaga koneksi TLS di lingkungan Serverless Vercel
+const agent = new https.Agent({
+  keepAlive: true,
+  rejectUnauthorized: true
+});
 
-  try {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+// Fungsi sendMessage menggunakan modul HTTPS native Node.js (Solusi TypeError: fetch failed)
+function sendMessage(chatId, text, replyMarkup = null) {
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: replyMarkup
     });
-  } catch (e) {
-    console.error('Error SendMessage:', e);
-  }
+
+    const options = {
+      hostname: 'api.telegram.org',
+      port: 443,
+      path: `/bot${BOT_TOKEN}/sendMessage`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      },
+      agent: agent,
+      timeout: 8000
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => { resolve(data); });
+    });
+
+    req.on('error', (e) => {
+      console.error('Error SendMessage (HTTPS):', e.message);
+      resolve(null);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+
+    req.write(payload);
+    req.end();
+  });
 }
 
 export default async function handler(req, res) {
