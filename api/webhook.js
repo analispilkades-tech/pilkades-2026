@@ -29,7 +29,7 @@ async function sendMessage(chatId, text, replyMarkup = null) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).send('OK');
 
-  // Langsung beri respon 200 OK ke Telegram agar HTTP request tidak menggantung
+  // Berikan respon HTTP 200 OK secara cepat ke Telegram
   res.status(200).json({ ok: true });
 
   const update = req.body;
@@ -39,7 +39,9 @@ export default async function handler(req, res) {
   const text = update.message.text ? update.message.text.trim() : '';
 
   try {
-    // 1. RESPONS LANGSUNG UNTUK COMMAND /start
+    // ===================================================
+    // 1. COMMAND /start (Sama sekali tidak menggunakan Supabase)
+    // ===================================================
     if (text === '/start') {
       await sendMessage(
         chatId,
@@ -50,7 +52,9 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===================================================
     // 2. COMMAND /reg <NRP>
+    // ===================================================
     if (text.toLowerCase().startsWith('/reg')) {
       const parts = text.split(' ');
       const nrpInput = parts.length > 1 ? parts[1].trim() : '';
@@ -63,24 +67,25 @@ export default async function handler(req, res) {
         return;
       }
 
-      const { data: petugas } = await supabase
+      // Cek NRP di database
+      const { data: petugas, error: errSearch } = await supabase
         .from('master_petugas')
         .select('*')
         .eq('nrp', nrpInput)
         .maybeSingle();
 
-      if (!petugas) {
+      if (errSearch || !petugas) {
         await sendMessage(
           chatId,
-          `❌ <b>NRP tidak terdaftar!</b>\n\nSilakan hubungi Admin Panitia untuk pendaftaran akun petugas lapangan.`
+          `❌ <b>NRP tidak terdaftar!</b>\n\nSilakan hubungi Admin Panitia untuk pendaftaran petugas lapangan.`
         );
         return;
       }
 
-      // Tandai temporary status WAIT_PIN
+      // Simpan chat_id_telegram secara langsung sebagai status menunggu PIN
       await supabase
         .from('master_petugas')
-        .update({ tps_aktif: `WAIT_PIN_${nrpInput}` })
+        .update({ chat_id_telegram: `WAIT_${chatId}` })
         .eq('nrp', nrpInput);
 
       await sendMessage(
@@ -91,41 +96,49 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Ambil profil petugas jika sudah terdaftar
+    // ===================================================
+    // 3. PROSES VERIFIKASI PIN
+    // ===================================================
+    // Cek apakah ada petugas dengan status WAIT_chatId
+    const { data: petugasWait } = await supabase
+      .from('master_petugas')
+      .select('*')
+      .eq('chat_id_telegram', `WAIT_${chatId}`)
+      .maybeSingle();
+
+    if (petugasWait) {
+      if (text === String(petugasWait.pin).trim()) {
+        // PIN Benar: Aktifkan Chat ID resmi
+        await supabase
+          .from('master_petugas')
+          .update({ chat_id_telegram: chatId })
+          .eq('nrp', petugasWait.nrp);
+
+        await sendMessage(
+          chatId,
+          `Selamat datang <b>${petugasWait.nama_petugas}</b>, Anda teregister pada:\n` +
+          `• Kecamatan : <b>${petugasWait.kecamatan}</b>\n` +
+          `• Desa : <b>${petugasWait.desa}</b>\n\n` +
+          `Ketik <b>/kirimhasil</b> untuk melaporkan hasil, dan ikuti panduannya.`
+        );
+        return;
+      } else {
+        await sendMessage(
+          chatId,
+          `❌ <b>PIN Salah!</b> Silakan masukkan PIN Rahasia Anda dengan benar:`
+        );
+        return;
+      }
+    }
+
+    // Ambil akun petugas yang sudah aktif
     const { data: petugasLogin } = await supabase
       .from('master_petugas')
       .select('*')
       .eq('chat_id_telegram', chatId)
       .maybeSingle();
 
-    // 3. PROSES VERIFIKASI PIN
     if (!petugasLogin) {
-      const { data: petugasWaitPin } = await supabase
-        .from('master_petugas')
-        .select('*')
-        .like('tps_aktif', 'WAIT_PIN_%')
-        .eq('pin', text)
-        .maybeSingle();
-
-      if (petugasWaitPin) {
-        await supabase
-          .from('master_petugas')
-          .update({ 
-            chat_id_telegram: chatId,
-            tps_aktif: null 
-          })
-          .eq('nrp', petugasWaitPin.nrp);
-
-        await sendMessage(
-          chatId,
-          `Selamat datang <b>${petugasWaitPin.nama_petugas}</b>, Anda teregister pada:\n` +
-          `• Kecamatan : <b>${petugasWaitPin.kecamatan}</b>\n` +
-          `• Desa : <b>${petugasWaitPin.desa}</b>\n\n` +
-          `Ketik <b>/kirimhasil</b> untuk melaporkan hasil, dan ikuti panduannya.`
-        );
-        return;
-      }
-
       await sendMessage(
         chatId,
         `Ketik <code>/reg&lt;spasi&gt;NRP</code> untuk melakukan registrasi.`
@@ -133,7 +146,9 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===================================================
     // 4. COMMAND /kirimhasil
+    // ===================================================
     if (text === '/kirimhasil') {
       const { data: daftarTps } = await supabase
         .from('master_desa')
@@ -161,7 +176,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    // 5. INPUT TPS
+    // ===================================================
+    // 5. INPUT PILIHAN TPS
+    // ===================================================
     if (text.startsWith('📍') || text.toLowerCase().startsWith('tps')) {
       const tpsSelected = text.replace('📍', '').trim();
 
@@ -180,7 +197,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    // 6. INPUT PEROLEHAN ANGKA SUARA (#)
+    // ===================================================
+    // 6. INPUT ANGKA SUARA (#)
+    // ===================================================
     if (text.includes('#')) {
       const rawArray = text.split('#').map(a => parseInt(a.trim()) || 0);
       const tpsTarget = petugasLogin.tps_aktif || 'TPS 01';
@@ -233,7 +252,9 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===================================================
     // 7. INPUT FOTO C1 PLANO
+    // ===================================================
     if (update.message.photo && update.message.photo.length > 0) {
       const photoObj = update.message.photo[update.message.photo.length - 1];
       const resInfo = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${photoObj.file_id}`);
@@ -262,7 +283,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Default Respon
+    // Respon default
     await sendMessage(
       chatId,
       `Ketik <b>/kirimhasil</b> untuk melaporkan hasil suara atau ketik <b>/start</b> untuk menu utama.`
