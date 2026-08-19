@@ -1,1133 +1,2170 @@
-import { createClient } from '@supabase/supabase-js';
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+  <title>Panel Admin & Audit Pilkades 2026</title>
 
-/*
-=========================================================
-KONFIGURASI
-=========================================================
-*/
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
 
-const ACTIONS = [
-  'SAHKAN_MANUAL',
-  'SAHKAN_PLANO',
-  'UBAH_DATA',
-  'RESET_VERIFIKASI'
-];
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
 
-const MIN_OCR_CONFIDENCE = 40;
+  <!-- =====================================================
+       HEADER
+  ====================================================== -->
 
+  <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-lg">
 
-/*
-=========================================================
-HELPER
-=========================================================
-*/
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
 
-function numberOrZero(value) {
-  const n = Number(value);
+      <div>
 
-  if (!Number.isFinite(n)) {
-    return 0;
-  }
+        <span
+          class="text-xs font-bold text-blue-400 uppercase tracking-widest">
+          Polres Wonosobo
+        </span>
 
-  return Math.max(0, Math.floor(n));
-}
+        <h1 class="text-xl font-extrabold text-white">
+          PANEL AUDIT & VERIFIKASI C1
+        </h1>
 
+      </div>
 
-function calculateTotal(data) {
-  return (
-    numberOrZero(data.suara_calon_01) +
-    numberOrZero(data.suara_calon_02) +
-    numberOrZero(data.suara_calon_03) +
-    numberOrZero(data.suara_calon_04) +
-    numberOrZero(data.suara_calon_05) +
-    numberOrZero(data.suara_tidak_sah)
-  );
-}
+      <div class="flex items-center space-x-4">
 
+        <span
+          id="adminNameDisplay"
+          class="text-xs text-slate-300 font-mono hidden md:inline">
+          Logged as: Admin
+        </span>
 
-function calculateOcrTotal(plano) {
-  return (
-    numberOrZero(plano.ocr_calon_01) +
-    numberOrZero(plano.ocr_calon_02) +
-    numberOrZero(plano.ocr_calon_03) +
-    numberOrZero(plano.ocr_calon_04) +
-    numberOrZero(plano.ocr_calon_05) +
-    numberOrZero(plano.ocr_tidak_sah)
-  );
-}
+        <button
+          onclick="logoutAdmin()"
+          class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+
+          Keluar (Logout)
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </header>
 
 
-/*
-=========================================================
-AUDIT LOG
-=========================================================
-*/
+  <!-- =====================================================
+       MAIN
+  ====================================================== -->
 
-async function logAktivitas({
-  jenis_aksi,
-  admin_nama,
-  hasil_sebelum = null,
-  hasil_sesudah = null,
-  keterangan = ''
-}) {
+  <main class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow">
 
-  try {
 
-    await supabase
-      .from('log_aktivitas')
-      .insert({
+    <!-- ===================================================
+         STATISTIK / FILTER
+    ==================================================== -->
 
-        sumber_aksi:
-          'ADMIN_PANEL',
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
-        jenis_aksi,
 
-        nrp_saksi:
-          hasil_sebelum?.nrp_saksi ||
-          hasil_sesudah?.nrp_saksi ||
-          null,
+      <!-- PENDING -->
 
-        nama_saksi:
-          hasil_sebelum?.nama_saksi ||
-          hasil_sesudah?.nama_saksi ||
-          null,
+      <button
+        onclick="setFilterStatus('PENDING')"
+        id="tabPending"
+        class="bg-slate-800 hover:bg-slate-700 border border-amber-500/50 p-4 rounded-xl text-left transition shadow-md">
 
-        kecamatan:
-          hasil_sebelum?.kecamatan ||
-          hasil_sesudah?.kecamatan ||
-          null,
+        <div class="text-xs text-amber-400 font-semibold uppercase">
+          ⚠️ Perlu Audit / Review
+        </div>
 
-        desa:
-          hasil_sebelum?.desa ||
-          hasil_sesudah?.desa ||
-          null,
+        <div
+          id="countPending"
+          class="text-2xl font-extrabold text-white mt-1">
+          0 TPS
+        </div>
 
-        tps:
-          hasil_sebelum?.tps ||
-          hasil_sesudah?.tps ||
-          null,
+      </button>
 
-        data_sebelum:
-          hasil_sebelum,
 
-        data_sesudah:
-          hasil_sesudah,
+      <!-- VERIFIED -->
 
-        keterangan:
-          `[Admin: ${admin_nama || 'Admin'}] ${keterangan}`
+      <button
+        onclick="setFilterStatus('VERIFIED')"
+        id="tabVerified"
+        class="bg-slate-800 hover:bg-slate-700 border border-emerald-500/50 p-4 rounded-xl text-left transition shadow-md">
 
-      });
+        <div class="text-xs text-emerald-400 font-semibold uppercase">
+          ✅ Terverifikasi / Sah
+        </div>
 
-  } catch (error) {
+        <div
+          id="countVerified"
+          class="text-2xl font-extrabold text-white mt-1">
+          0 TPS
+        </div>
 
-    /*
-     * Audit log tidak boleh membuat
-     * proses utama gagal.
-     */
+      </button>
 
-    console.error(
-      '[ADMIN] LOG AKTIVITAS ERROR:',
-      error
+
+      <!-- ALL -->
+
+      <button
+        onclick="setFilterStatus('ALL')"
+        id="tabAll"
+        class="bg-slate-800 hover:bg-slate-700 border border-blue-500/50 p-4 rounded-xl text-left transition shadow-md">
+
+        <div class="text-xs text-blue-400 font-semibold uppercase">
+          📋 Semua Data Livecount
+        </div>
+
+        <div
+          id="countAll"
+          class="text-2xl font-extrabold text-white mt-1">
+          0 TPS
+        </div>
+
+      </button>
+
+    </div>
+
+
+    <!-- ===================================================
+         TABEL
+    ==================================================== -->
+
+    <div
+      class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-6">
+
+
+      <!-- TITLE + SEARCH -->
+
+      <div
+        class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+
+        <h2
+          id="tableTitle"
+          class="text-lg font-bold text-white">
+
+          Daftar Data Masuk
+
+        </h2>
+
+
+        <input
+          type="text"
+          id="searchQuery"
+          oninput="applyTableFilter()"
+          placeholder="Cari Desa / Kecamatan / Petugas..."
+          class="p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+      </div>
+
+
+      <!-- TABLE -->
+
+      <div class="overflow-x-auto">
+
+        <table
+          class="w-full text-left text-sm border-collapse">
+
+          <thead>
+
+            <tr
+              class="bg-slate-900/50 text-slate-400 border-b border-slate-700">
+
+              <th class="p-3">
+                Lokasi
+              </th>
+
+              <th class="p-3">
+                Petugas
+              </th>
+
+              <th class="p-3 text-center">
+                Perolehan Suara
+              </th>
+
+              <th class="p-3 text-center">
+                Total
+              </th>
+
+              <th class="p-3 text-center">
+                Status
+              </th>
+
+              <th class="p-3 text-center">
+                Foto Plano
+              </th>
+
+              <th class="p-3 text-center">
+                Aksi Admin
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody
+            id="adminTableBody"
+            class="divide-y divide-slate-700/50 text-slate-300">
+
+            <tr>
+
+              <td
+                colspan="7"
+                class="text-center py-8 text-slate-500">
+
+                Memuat data audit...
+
+              </td>
+
+            </tr>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  </main>
+
+
+  <!-- =====================================================
+       FOOTER
+  ====================================================== -->
+
+  <footer
+    class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+
+    <p>
+      &copy; 2026 brengos ntd.
+      Sistem Pengamanan & Audit Pilkades Polres Wonosobo.
+    </p>
+
+  </footer>
+
+
+  <!-- =====================================================
+       MODAL UBAH DATA
+  ====================================================== -->
+
+  <div
+    id="editModal"
+    class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
+
+    <div
+      class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg">
+
+
+      <!-- MODAL HEADER -->
+
+      <div
+        class="p-5 border-b border-slate-700">
+
+        <h3
+          class="text-lg font-bold text-white">
+
+          ✏️ Ubah Data Hasil Suara
+
+        </h3>
+
+        <p
+          id="editLocation"
+          class="text-xs text-slate-400 mt-1">
+
+          -
+
+        </p>
+
+      </div>
+
+
+      <!-- FORM -->
+
+      <div class="p-5 space-y-4">
+
+
+        <!-- CALON 01 -->
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1">
+
+            Calon 01
+
+          </label>
+
+          <input
+            id="editCalon01"
+            type="number"
+            min="0"
+            step="1"
+            class="edit-input">
+
+        </div>
+
+
+        <!-- CALON 02 -->
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1">
+
+            Calon 02
+
+          </label>
+
+          <input
+            id="editCalon02"
+            type="number"
+            min="0"
+            step="1"
+            class="edit-input">
+
+        </div>
+
+
+        <!-- CALON 03 -->
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1">
+
+            Calon 03
+
+          </label>
+
+          <input
+            id="editCalon03"
+            type="number"
+            min="0"
+            step="1"
+            class="edit-input">
+
+        </div>
+
+
+        <!-- CALON 04 -->
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1">
+
+            Calon 04
+
+          </label>
+
+          <input
+            id="editCalon04"
+            type="number"
+            min="0"
+            step="1"
+            class="edit-input">
+
+        </div>
+
+
+        <!-- CALON 05 -->
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1">
+
+            Calon 05
+
+          </label>
+
+          <input
+            id="editCalon05"
+            type="number"
+            min="0"
+            step="1"
+            class="edit-input">
+
+        </div>
+
+
+        <!-- TIDAK SAH -->
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1">
+
+            Suara Tidak Sah
+
+          </label>
+
+          <input
+            id="editTidakSah"
+            type="number"
+            min="0"
+            step="1"
+            class="edit-input">
+
+        </div>
+
+
+        <!-- TOTAL PREVIEW -->
+
+        <div
+          class="bg-slate-900 border border-slate-700 rounded-xl p-4">
+
+          <div class="flex justify-between">
+
+            <span class="text-slate-400 text-sm">
+              Total suara
+            </span>
+
+            <span
+              id="editTotal"
+              class="text-xl font-extrabold text-emerald-400">
+
+              0
+
+            </span>
+
+          </div>
+
+          <p
+            class="text-xs text-slate-500 mt-1">
+
+            Total dihitung kembali oleh server.
+
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- MODAL BUTTON -->
+
+      <div
+        class="p-5 border-t border-slate-700 flex justify-end gap-3">
+
+        <button
+          onclick="closeEditModal()"
+          class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-bold">
+
+          Batal
+
+        </button>
+
+        <button
+          onclick="submitEditData()"
+          class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg text-sm font-bold text-white">
+
+          💾 Simpan & Sahkan
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       JAVASCRIPT
+  ====================================================== -->
+
+  <script>
+
+
+    /* ====================================================
+       GLOBAL
+    ==================================================== */
+
+    let globalData = [];
+
+    let currentFilter = 'PENDING';
+
+    let editingId = null;
+
+
+    /* ====================================================
+       INIT
+    ==================================================== */
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+
+        const adminNama =
+          localStorage.getItem("adminNama") ||
+          "Admin";
+
+        document.getElementById(
+          "adminNameDisplay"
+        ).innerText =
+          `Logged as: ${adminNama}`;
+
+
+        fetchAdminData();
+
+
+        /*
+         * Refresh setiap 10 detik.
+         *
+         * OCR tetap berjalan di backend.
+         * Dashboard hanya membaca status terbaru.
+         */
+
+        setInterval(
+          fetchAdminData,
+          10000
+        );
+
+      }
     );
 
-  }
-}
 
+    /* ====================================================
+       FETCH DATA
+    ==================================================== */
 
-/*
-=========================================================
-MAIN HANDLER
-=========================================================
-*/
+    async function fetchAdminData() {
 
-export default async function handler(req, res) {
+      try {
 
-  /*
-  -------------------------------------------------------
-  CORS
-  -------------------------------------------------------
-  */
+        const res =
+          await fetch('/api/get-data');
 
-  res.setHeader(
-    'Access-Control-Allow-Origin',
-    '*'
-  );
 
-  res.setHeader(
-    'Access-Control-Allow-Methods',
-    'POST, OPTIONS'
-  );
+        const result =
+          await res.json();
 
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Content-Type'
-  );
 
+        if (!res.ok) {
 
-  if (req.method === 'OPTIONS') {
+          throw new Error(
+            result.error ||
+            'Gagal mengambil data'
+          );
 
-    return res
-      .status(200)
-      .end();
+        }
 
-  }
 
+        globalData =
+          result.data ||
+          result ||
+          [];
 
-  if (req.method !== 'POST') {
 
-    return res
-      .status(405)
-      .json({
+        updateTabCounts();
 
-        ok: false,
+        applyTableFilter();
 
-        error:
-          'Method not allowed'
-
-      });
-
-  }
-
-
-  try {
-
-    const {
-      id,
-      action,
-      admin_nama,
-      data
-    } = req.body || {};
-
-
-    /*
-    -------------------------------------------------------
-    VALIDASI ID
-    -------------------------------------------------------
-    */
-
-    if (!id) {
-
-      return res
-        .status(400)
-        .json({
-
-          ok: false,
-
-          error:
-            'ID hasil_suara wajib diisi'
-
-        });
-
-    }
-
-
-    /*
-    -------------------------------------------------------
-    VALIDASI ACTION
-    -------------------------------------------------------
-    */
-
-    if (!ACTIONS.includes(action)) {
-
-      return res
-        .status(400)
-        .json({
-
-          ok: false,
-
-          error:
-            `Aksi admin tidak valid. ` +
-            `Aksi yang tersedia: ${ACTIONS.join(', ')}`
-
-        });
-
-    }
-
-
-    /*
-    =======================================================
-    AMBIL DATA HASIL SUARA
-    =======================================================
-    */
-
-    const {
-      data: hasil,
-      error: hasilError
-    } = await supabase
-
-      .from('hasil_suara')
-
-      .select('*')
-
-      .eq('id', id)
-
-      .single();
-
-
-    if (hasilError || !hasil) {
-
-      console.error(
-        '[ADMIN] DATA HASIL SUARA ERROR:',
-        hasilError
-      );
-
-      return res
-        .status(404)
-        .json({
-
-          ok: false,
-
-          error:
-            'Data hasil suara tidak ditemukan'
-
-        });
-
-    }
-
-
-    /*
-    =======================================================
-    SIMPAN SNAPSHOT DATA SEBELUM PERUBAHAN
-    =======================================================
-    */
-
-    const dataSebelum = {
-
-      suara_calon_01:
-        hasil.suara_calon_01,
-
-      suara_calon_02:
-        hasil.suara_calon_02,
-
-      suara_calon_03:
-        hasil.suara_calon_03,
-
-      suara_calon_04:
-        hasil.suara_calon_04,
-
-      suara_calon_05:
-        hasil.suara_calon_05,
-
-      suara_tidak_sah:
-        hasil.suara_tidak_sah,
-
-      total_suara_masuk:
-        hasil.total_suara_masuk,
-
-      status_verifikasi:
-        hasil.status_verifikasi
-
-    };
-
-
-    /*
-    =======================================================
-    ACTION 1
-    SAHKAN MANUAL
-    =======================================================
-    
-    Artinya:
-
-    Admin menyatakan bahwa angka LIVECOUNT saat ini
-    sudah benar berdasarkan pemeriksaan admin.
-
-    Tidak ada angka yang diubah.
-    */
-
-    if (action === 'SAHKAN_MANUAL') {
-
-      const {
-        data: updated,
-        error: updateError
-      } = await supabase
-
-        .from('hasil_suara')
-
-        .update({
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN'
-
-        })
-
-        .eq('id', id)
-
-        .select()
-
-        .single();
-
-
-      if (updateError) {
+      } catch (err) {
 
         console.error(
-          '[ADMIN] SAHKAN MANUAL ERROR:',
-          updateError
+          "Gagal memuat data admin:",
+          err
         );
-
-        return res
-          .status(500)
-          .json({
-
-            ok: false,
-
-            error:
-              updateError.message
-
-          });
 
       }
 
-
-      await logAktivitas({
-
-        jenis_aksi:
-          'ADMIN_SAHKAN_MANUAL',
-
-        admin_nama,
-
-        hasil_sebelum:
-          dataSebelum,
-
-        hasil_sesudah: {
-
-          ...dataSebelum,
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN'
-
-        },
-
-        keterangan:
-          'Admin mengesahkan hasil input manual. ' +
-          'Angka livecount tidak diubah.'
-
-      });
+    }
 
 
-      console.log(
-        `[ADMIN] ${admin_nama || 'Admin'} ` +
-        `mengesahkan INPUT MANUAL ` +
-        `hasil_suara ID=${id}`
-      );
+    /* ====================================================
+       FILTER TAB
+    ==================================================== */
 
+    function setFilterStatus(status) {
 
-      return res
-        .status(200)
-        .json({
+      currentFilter =
+        status;
 
-          ok: true,
-
-          message:
-            'Hasil input manual berhasil disahkan admin.',
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN',
-
-          data:
-            updated
-
-        });
+      applyTableFilter();
 
     }
 
 
-    /*
-    =======================================================
-    ACTION 2
-    SAHKAN PLANO
-    =======================================================
-    
-    PENTING:
+    /* ====================================================
+       COUNT
+    ==================================================== */
 
-    OCR hanya boleh diterapkan jika:
+    function updateTabCounts() {
 
-    1. Ada hasil OCR COMPLETED
-    2. Confidence >= 40
-    3. Nilai OCR valid
-    */
+      const pendingStatuses = [
 
-    if (action === 'SAHKAN_PLANO') {
+        'PLANO TIDAK SESUAI',
 
-      /*
-      -----------------------------------------------------
-      AMBIL OCR TERBARU
-      -----------------------------------------------------
-      */
+        'FOTO PLANO BELUM TERVERIFIKASI',
 
-      const {
-        data: plano,
-        error: planoError
-      } = await supabase
+        'MEMERLUKAN VERIFIKASI ADMIN'
 
-        .from('plano_uploads')
+      ];
 
-        .select('*')
 
-        .eq(
-          'hasil_suara_id',
-          id
-        )
+      const verifiedStatuses = [
 
-        .eq(
-          'ocr_status',
-          'COMPLETED'
-        )
+        'AUTO VERIFIED',
 
-        .order(
-          'created_at',
-          {
-            ascending: false
+        'AUTO_VERIFIED',
+
+        'EDITED_BY_SAKSI',
+
+        'VERIFIED_BY_ADMIN'
+
+      ];
+
+
+      const pendingCount =
+        globalData.filter(
+          d =>
+            pendingStatuses.includes(
+              d.status_verifikasi
+            )
+        ).length;
+
+
+      const verifiedCount =
+        globalData.filter(
+          d =>
+            verifiedStatuses.includes(
+              d.status_verifikasi
+            )
+        ).length;
+
+
+      document.getElementById(
+        "countPending"
+      ).innerText =
+        `${pendingCount} TPS`;
+
+
+      document.getElementById(
+        "countVerified"
+      ).innerText =
+        `${verifiedCount} TPS`;
+
+
+      document.getElementById(
+        "countAll"
+      ).innerText =
+        `${globalData.length} TPS`;
+
+    }
+
+
+    /* ====================================================
+       TABLE FILTER
+    ==================================================== */
+
+    function applyTableFilter() {
+
+      const search =
+        document
+          .getElementById(
+            "searchQuery"
+          )
+          .value
+          .toLowerCase();
+
+
+      const pendingStatuses = [
+
+        'PLANO TIDAK SESUAI',
+
+        'FOTO PLANO BELUM TERVERIFIKASI',
+
+        'MEMERLUKAN VERIFIKASI ADMIN'
+
+      ];
+
+
+      const verifiedStatuses = [
+
+        'AUTO VERIFIED',
+
+        'AUTO_VERIFIED',
+
+        'EDITED_BY_SAKSI',
+
+        'VERIFIED_BY_ADMIN'
+
+      ];
+
+
+      const filtered =
+        globalData.filter(
+          item => {
+
+
+            const matchSearch =
+
+              String(
+                item.desa || ''
+              )
+              .toLowerCase()
+              .includes(search)
+
+              ||
+
+              String(
+                item.kecamatan || ''
+              )
+              .toLowerCase()
+              .includes(search)
+
+              ||
+
+              String(
+                item.nama_saksi || ''
+              )
+              .toLowerCase()
+              .includes(search);
+
+
+            if (!matchSearch) {
+
+              return false;
+
+            }
+
+
+            if (
+              currentFilter ===
+              'PENDING'
+            ) {
+
+              return pendingStatuses.includes(
+                item.status_verifikasi
+              );
+
+            }
+
+
+            if (
+              currentFilter ===
+              'VERIFIED'
+            ) {
+
+              return verifiedStatuses.includes(
+                item.status_verifikasi
+              );
+
+            }
+
+
+            return true;
+
           }
+        );
+
+
+      renderAdminTable(
+        filtered
+      );
+
+    }
+
+
+    /* ====================================================
+       ESCAPE HTML
+    ==================================================== */
+
+    function escapeHtml(value) {
+
+      return String(
+        value ?? ''
+      )
+
+        .replace(
+          /&/g,
+          '&amp;'
         )
 
-        .limit(1)
+        .replace(
+          /</g,
+          '&lt;'
+        )
 
-        .maybeSingle();
+        .replace(
+          />/g,
+          '&gt;'
+        )
 
+        .replace(
+          /"/g,
+          '&quot;'
+        )
 
-      if (planoError) {
-
-        console.error(
-          '[ADMIN] AMBIL PLANO ERROR:',
-          planoError
+        .replace(
+          /'/g,
+          '&#039;'
         );
 
-        return res
-          .status(500)
-          .json({
-
-            ok: false,
-
-            error:
-              planoError.message
-
-          });
-
-      }
+    }
 
 
-      if (!plano) {
+    /* ====================================================
+       STATUS BADGE
+    ==================================================== */
 
-        return res
-          .status(404)
-          .json({
+    function statusBadge(status) {
 
-            ok: false,
-
-            error:
-              'Hasil OCR plano belum tersedia.'
-
-          });
-
-      }
+      status =
+        status ||
+        'PENDING';
 
 
-      /*
-      -----------------------------------------------------
-      CEK CONFIDENCE
-      -----------------------------------------------------
-      */
-
-      const confidence =
-        Number(
-          plano.ocr_confidence || 0
-        );
+      let cls =
+        'bg-slate-700 text-slate-300';
 
 
       if (
-        !Number.isFinite(confidence) ||
-        confidence < MIN_OCR_CONFIDENCE
+        status ===
+        'MEMERLUKAN VERIFIKASI ADMIN'
       ) {
 
-        return res
-          .status(400)
-          .json({
-
-            ok: false,
-
-            error:
-              `Plano tidak dapat disahkan otomatis. ` +
-              `Confidence OCR hanya ${confidence}. ` +
-              `Minimum yang diperlukan ${MIN_OCR_CONFIDENCE}. ` +
-              `Silakan gunakan Ubah Data atau Sahkan Manual.`,
-
-            code:
-              'OCR_CONFIDENCE_TOO_LOW',
-
-            confidence,
-
-            minimum:
-              MIN_OCR_CONFIDENCE
-
-          });
+        cls =
+          'bg-amber-900/50 text-amber-300 border border-amber-700';
 
       }
 
 
-      /*
-      -----------------------------------------------------
-      AMBIL ANGKA OCR
-      -----------------------------------------------------
-      */
+      if (
+        status ===
+        'PLANO TIDAK SESUAI'
+      ) {
 
-      const ocrData = {
-
-        suara_calon_01:
-          numberOrZero(
-            plano.ocr_calon_01
-          ),
-
-        suara_calon_02:
-          numberOrZero(
-            plano.ocr_calon_02
-          ),
-
-        suara_calon_03:
-          numberOrZero(
-            plano.ocr_calon_03
-          ),
-
-        suara_calon_04:
-          numberOrZero(
-            plano.ocr_calon_04
-          ),
-
-        suara_calon_05:
-          numberOrZero(
-            plano.ocr_calon_05
-          ),
-
-        suara_tidak_sah:
-          numberOrZero(
-            plano.ocr_tidak_sah
-          )
-
-      };
-
-
-      const total =
-        calculateTotal(
-          ocrData
-        );
-
-
-      /*
-      -----------------------------------------------------
-      UPDATE LIVECOUNT
-      -----------------------------------------------------
-      */
-
-      const {
-        data: updated,
-        error: updateError
-      } = await supabase
-
-        .from('hasil_suara')
-
-        .update({
-
-          suara_calon_01:
-            ocrData.suara_calon_01,
-
-          suara_calon_02:
-            ocrData.suara_calon_02,
-
-          suara_calon_03:
-            ocrData.suara_calon_03,
-
-          suara_calon_04:
-            ocrData.suara_calon_04,
-
-          suara_calon_05:
-            ocrData.suara_calon_05,
-
-          suara_tidak_sah:
-            ocrData.suara_tidak_sah,
-
-          total_suara_masuk:
-            total,
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN'
-
-        })
-
-        .eq('id', id)
-
-        .select()
-
-        .single();
-
-
-      if (updateError) {
-
-        console.error(
-          '[ADMIN] UPDATE PLANO ERROR:',
-          updateError
-        );
-
-        return res
-          .status(500)
-          .json({
-
-            ok: false,
-
-            error:
-              updateError.message
-
-          });
+        cls =
+          'bg-red-900/50 text-red-300 border border-red-700';
 
       }
 
 
-      await logAktivitas({
+      if (
+        status ===
+        'FOTO PLANO BELUM TERVERIFIKASI'
+      ) {
 
-        jenis_aksi:
-          'ADMIN_SAHKAN_PLANO',
+        cls =
+          'bg-orange-900/50 text-orange-300 border border-orange-700';
 
-        admin_nama,
-
-        hasil_sebelum:
-          dataSebelum,
-
-        hasil_sesudah: {
-
-          suara_calon_01:
-            ocrData.suara_calon_01,
-
-          suara_calon_02:
-            ocrData.suara_calon_02,
-
-          suara_calon_03:
-            ocrData.suara_calon_03,
-
-          suara_calon_04:
-            ocrData.suara_calon_04,
-
-          suara_calon_05:
-            ocrData.suara_calon_05,
-
-          suara_tidak_sah:
-            ocrData.suara_tidak_sah,
-
-          total_suara_masuk:
-            total,
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN'
-
-        },
-
-        keterangan:
-          `Admin mengesahkan hasil plano/OCR. ` +
-          `Confidence=${confidence}.`
-
-      });
+      }
 
 
-      console.log(
-        `[ADMIN] ${admin_nama || 'Admin'} ` +
-        `mengesahkan HASIL PLANO ` +
-        `hasil_suara ID=${id}`
-      );
+      if (
+        status ===
+        'VERIFIED_BY_ADMIN'
+      ) {
+
+        cls =
+          'bg-emerald-900/50 text-emerald-300 border border-emerald-700';
+
+      }
 
 
-      return res
-        .status(200)
-        .json({
+      if (
+        status ===
+        'AUTO VERIFIED' ||
+        status ===
+        'AUTO_VERIFIED'
+      ) {
 
-          ok: true,
+        cls =
+          'bg-blue-900/50 text-blue-300 border border-blue-700';
 
-          message:
-            'Hasil plano berhasil disahkan admin.',
+      }
 
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN',
 
-          confidence,
+      return `
+        <span
+          class="px-2 py-1 ${cls} rounded text-xs font-bold whitespace-nowrap">
 
-          applied:
-            ocrData,
+          ${escapeHtml(status)}
 
-          total,
-
-          data:
-            updated
-
-        });
+        </span>
+      `;
 
     }
 
 
-    /*
-    =======================================================
-    ACTION 3
-    UBAH DATA
-    =======================================================
-    
-    Admin mengirim angka baru secara manual.
-    */
+    /* ====================================================
+       RENDER TABLE
+    ==================================================== */
 
-    if (action === 'UBAH_DATA') {
+    function renderAdminTable(data) {
 
-      /*
-      -----------------------------------------------------
-      DATA WAJIB ADA
-      -----------------------------------------------------
-      */
+      const tbody =
+        document.getElementById(
+          "adminTableBody"
+        );
 
-      if (!data || typeof data !== 'object') {
 
-        return res
-          .status(400)
-          .json({
+      tbody.innerHTML = "";
 
-            ok: false,
 
-            error:
-              'Data perubahan wajib dikirim.'
+      if (
+        data.length === 0
+      ) {
 
-          });
+        tbody.innerHTML = `
+
+          <tr>
+
+            <td
+              colspan="7"
+              class="text-center py-8 text-slate-500">
+
+              Tidak ada data dalam kategori ini.
+
+            </td>
+
+          </tr>
+
+        `;
+
+        return;
 
       }
 
 
-      /*
-      -----------------------------------------------------
-      NORMALISASI ANGKA
-      -----------------------------------------------------
-      */
-
-      const newData = {
-
-        suara_calon_01:
-          numberOrZero(
-            data.suara_calon_01
-          ),
-
-        suara_calon_02:
-          numberOrZero(
-            data.suara_calon_02
-          ),
-
-        suara_calon_03:
-          numberOrZero(
-            data.suara_calon_03
-          ),
-
-        suara_calon_04:
-          numberOrZero(
-            data.suara_calon_04
-          ),
-
-        suara_calon_05:
-          numberOrZero(
-            data.suara_calon_05
-          ),
-
-        suara_tidak_sah:
-          numberOrZero(
-            data.suara_tidak_sah
-          )
-
-      };
+      data.forEach(
+        item => {
 
 
-      /*
-      -----------------------------------------------------
-      HITUNG TOTAL SERVER-SIDE
-      -----------------------------------------------------
-      */
+          const photoLink =
+            item.google_drive_url
 
-      const total =
-        calculateTotal(
-          newData
-        );
+              ? `
 
+                <a
+                  href="${escapeHtml(item.google_drive_url)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold inline-block shadow">
 
-      /*
-      -----------------------------------------------------
-      UPDATE
-      -----------------------------------------------------
-      */
+                  📁 Buka Foto
 
-      const {
-        data: updated,
-        error: updateError
-      } = await supabase
+                </a>
 
-        .from('hasil_suara')
+              `
 
-        .update({
+              :
 
-          suara_calon_01:
-            newData.suara_calon_01,
+              `
 
-          suara_calon_02:
-            newData.suara_calon_02,
+                <span
+                  class="text-slate-500 text-xs italic">
 
-          suara_calon_03:
-            newData.suara_calon_03,
+                  Belum Ada Foto
 
-          suara_calon_04:
-            newData.suara_calon_04,
+                </span>
 
-          suara_calon_05:
-            newData.suara_calon_05,
-
-          suara_tidak_sah:
-            newData.suara_tidak_sah,
-
-          total_suara_masuk:
-            total,
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN'
-
-        })
-
-        .eq('id', id)
-
-        .select()
-
-        .single();
+              `;
 
 
-      if (updateError) {
-
-        console.error(
-          '[ADMIN] UBAH DATA ERROR:',
-          updateError
-        );
-
-        return res
-          .status(500)
-          .json({
-
-            ok: false,
-
-            error:
-              updateError.message
-
-          });
-
-      }
+          const aksi =
+            renderActionButtons(
+              item
+            );
 
 
-      /*
-      -----------------------------------------------------
-      AUDIT LOG
-      -----------------------------------------------------
-      */
+          tbody.innerHTML += `
 
-      await logAktivitas({
-
-        jenis_aksi:
-          'ADMIN_UBAH_DATA',
-
-        admin_nama,
-
-        hasil_sebelum:
-          dataSebelum,
-
-        hasil_sesudah: {
-
-          ...newData,
-
-          total_suara_masuk:
-            total,
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN'
-
-        },
-
-        keterangan:
-          'Admin melakukan koreksi angka hasil suara secara manual.'
-
-      });
+            <tr
+              class="hover:bg-slate-700/30 transition align-top">
 
 
-      console.log(
-        `[ADMIN] ${admin_nama || 'Admin'} ` +
-        `MENGUBAH DATA ` +
-        `hasil_suara ID=${id}`
+              <!-- LOKASI -->
+
+              <td class="p-3">
+
+                <strong
+                  class="text-white">
+
+                  ${escapeHtml(
+                    item.desa || '-'
+                  )}
+
+                </strong>
+
+                <br>
+
+                <span
+                  class="text-xs text-slate-400">
+
+                  Kec.
+                  ${escapeHtml(
+                    item.kecamatan || '-'
+                  )}
+
+                  • TPS
+                  ${escapeHtml(
+                    item.tps || '-'
+                  )}
+
+                </span>
+
+              </td>
+
+
+              <!-- PETUGAS -->
+
+              <td
+                class="p-3 text-xs">
+
+                ${escapeHtml(
+                  item.nama_saksi || '-'
+                )}
+
+                <br>
+
+                <span
+                  class="text-slate-500">
+
+                  NRP:
+                  ${escapeHtml(
+                    item.nrp_saksi || '-'
+                  )}
+
+                </span>
+
+              </td>
+
+
+              <!-- SUARA -->
+
+              <td
+                class="p-3 text-center font-mono text-xs whitespace-nowrap">
+
+                01:
+                ${Number(
+                  item.suara_calon_01 || 0
+                )}
+
+                |
+
+                02:
+                ${Number(
+                  item.suara_calon_02 || 0
+                )}
+
+                |
+
+                03:
+                ${Number(
+                  item.suara_calon_03 || 0
+                )}
+
+                <br>
+
+                <span class="text-slate-500">
+
+                  04:
+                  ${Number(
+                    item.suara_calon_04 || 0
+                  )}
+
+                  |
+
+                  05:
+                  ${Number(
+                    item.suara_calon_05 || 0
+                  )}
+
+                  |
+
+                  Tidak Sah:
+                  ${Number(
+                    item.suara_tidak_sah || 0
+                  )}
+
+                </span>
+
+              </td>
+
+
+              <!-- TOTAL -->
+
+              <td
+                class="p-3 text-center font-bold text-white">
+
+                ${Number(
+                  item.total_suara_masuk || 0
+                )}
+
+              </td>
+
+
+              <!-- STATUS -->
+
+              <td
+                class="p-3 text-center">
+
+                ${statusBadge(
+                  item.status_verifikasi
+                )}
+
+              </td>
+
+
+              <!-- FOTO -->
+
+              <td
+                class="p-3 text-center">
+
+                ${photoLink}
+
+              </td>
+
+
+              <!-- AKSI -->
+
+              <td
+                class="p-3 text-center">
+
+                ${aksi}
+
+              </td>
+
+
+            </tr>
+
+          `;
+
+        }
       );
-
-
-      return res
-        .status(200)
-        .json({
-
-          ok: true,
-
-          message:
-            'Data hasil suara berhasil diubah dan disahkan admin.',
-
-          status_verifikasi:
-            'VERIFIED_BY_ADMIN',
-
-          data: {
-
-            ...newData,
-
-            total_suara_masuk:
-              total
-
-          },
-
-          record:
-            updated
-
-        });
 
     }
 
 
-    /*
-    =======================================================
-    ACTION 4
-    RESET VERIFIKASI
-    =======================================================
-    
-    Digunakan jika admin ingin membuka kembali
-    data untuk proses audit.
-    */
+    /* ====================================================
+       ACTION BUTTONS
+    ==================================================== */
 
-    if (
-      action ===
-      'RESET_VERIFIKASI'
+    function renderActionButtons(item) {
+
+      const status =
+        item.status_verifikasi ||
+        'PENDING';
+
+
+      /*
+       * Jika masih menunggu audit,
+       * tampilkan semua aksi yang relevan.
+       */
+
+      if (
+        status ===
+          'MEMERLUKAN VERIFIKASI ADMIN'
+
+        ||
+
+        status ===
+          'PLANO TIDAK SESUAI'
+
+        ||
+
+        status ===
+          'FOTO PLANO BELUM TERVERIFIKASI'
+
+      ) {
+
+        return `
+
+          <div
+            class="flex flex-col gap-2 min-w-[170px]">
+
+
+            <!-- SAHKAN MANUAL -->
+
+            <button
+
+              onclick="adminVerify(
+                '${item.id}',
+                'SAHKAN_MANUAL'
+              )"
+
+              class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+              ✅ Sahkan Manual
+
+            </button>
+
+
+            <!-- SAHKAN PLANO -->
+
+            <button
+
+              onclick="adminVerify(
+                '${item.id}',
+                'SAHKAN_PLANO'
+              )"
+
+              class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+              📊 Sahkan Plano
+
+            </button>
+
+
+            <!-- UBAH DATA -->
+
+            <button
+
+              onclick="openEditModal(
+                '${item.id}'
+              )"
+
+              class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+              ✏️ Ubah Data
+
+            </button>
+
+          </div>
+
+        `;
+
+      }
+
+
+      /*
+       * Data yang sudah VERIFIED tetap
+       * dapat dibuka kembali untuk audit.
+       */
+
+      if (
+        status ===
+          'VERIFIED_BY_ADMIN'
+
+        ||
+
+        status ===
+          'AUTO VERIFIED'
+
+        ||
+
+        status ===
+          'AUTO_VERIFIED'
+
+        ||
+
+        status ===
+          'EDITED_BY_SAKSI'
+
+      ) {
+
+        return `
+
+          <div
+            class="flex flex-col gap-2 min-w-[170px]">
+
+
+            <button
+
+              onclick="openEditModal(
+                '${item.id}'
+              )"
+
+              class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+              ✏️ Ubah Data
+
+            </button>
+
+
+            <button
+
+              onclick="adminVerify(
+                '${item.id}',
+                'RESET_VERIFIKASI'
+              )"
+
+              class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+              🔄 Buka Audit Lagi
+
+            </button>
+
+          </div>
+
+        `;
+
+      }
+
+
+      return `
+
+        <button
+
+          onclick="openEditModal(
+            '${item.id}'
+          )"
+
+          class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+          ✏️ Ubah Data
+
+        </button>
+
+      `;
+
+    }
+
+
+    /* ====================================================
+       ADMIN VERIFY
+    ==================================================== */
+
+    async function adminVerify(
+      id,
+      action
     ) {
 
-      const {
-        data: updated,
-        error: updateError
-      } = await supabase
 
-        .from('hasil_suara')
-
-        .update({
-
-          status_verifikasi:
-            'MEMERLUKAN VERIFIKASI ADMIN'
-
-        })
-
-        .eq('id', id)
-
-        .select()
-
-        .single();
-
-
-      if (updateError) {
-
-        console.error(
-          '[ADMIN] RESET ERROR:',
-          updateError
+      const item =
+        globalData.find(
+          d =>
+            String(d.id) ===
+            String(id)
         );
 
-        return res
-          .status(500)
-          .json({
 
-            ok: false,
+      if (!item) {
 
-            error:
-              updateError.message
+        alert(
+          'Data TPS tidak ditemukan.'
+        );
 
-          });
+        return;
 
       }
 
 
-      await logAktivitas({
-
-        jenis_aksi:
-          'ADMIN_RESET_VERIFIKASI',
-
-        admin_nama,
-
-        hasil_sebelum:
-          dataSebelum,
-
-        hasil_sesudah: {
-
-          ...dataSebelum,
-
-          status_verifikasi:
-            'MEMERLUKAN VERIFIKASI ADMIN'
-
-        },
-
-        keterangan:
-          'Admin membuka kembali data untuk audit/review.'
-
-      });
+      let pesan = '';
 
 
-      return res
-        .status(200)
-        .json({
+      /* --------------------------------------------------
+         SAHKAN MANUAL
+      -------------------------------------------------- */
 
-          ok: true,
+      if (
+        action ===
+        'SAHKAN_MANUAL'
+      ) {
 
-          message:
-            'Status verifikasi berhasil dikembalikan ke antrean audit.',
+        pesan =
 
-          status_verifikasi:
-            'MEMERLUKAN VERIFIKASI ADMIN',
+          `Sahkan HASIL INPUT MANUAL?\n\n` +
 
-          data:
-            updated
+          `Desa: ${
+            item.desa || '-'
+          }\n` +
 
-        });
+          `TPS: ${
+            item.tps || '-'
+          }\n\n` +
+
+          `01: ${
+            item.suara_calon_01 || 0
+          }\n` +
+
+          `02: ${
+            item.suara_calon_02 || 0
+          }\n` +
+
+          `03: ${
+            item.suara_calon_03 || 0
+          }\n` +
+
+          `04: ${
+            item.suara_calon_04 || 0
+          }\n` +
+
+          `05: ${
+            item.suara_calon_05 || 0
+          }\n` +
+
+          `Tidak Sah: ${
+            item.suara_tidak_sah || 0
+          }\n\n` +
+
+          `Total: ${
+            item.total_suara_masuk || 0
+          }`;
+
+      }
+
+
+      /* --------------------------------------------------
+         SAHKAN PLANO
+      -------------------------------------------------- */
+
+      else if (
+        action ===
+        'SAHKAN_PLANO'
+      ) {
+
+        pesan =
+
+          `Sahkan HASIL PLANO/OCR?\n\n` +
+
+          `PERHATIAN:\n` +
+
+          `Angka livecount akan diganti dengan hasil OCR jika OCR memenuhi syarat.\n\n` +
+
+          `Desa: ${
+            item.desa || '-'
+          }\n` +
+
+          `TPS: ${
+            item.tps || '-'
+          }\n\n` +
+
+          `Confidence OCR: ${
+            item.ocr_confidence ?? '-'
+          }\n\n` +
+
+          `Lanjutkan?`;
+
+      }
+
+
+      /* --------------------------------------------------
+         RESET
+      -------------------------------------------------- */
+
+      else if (
+        action ===
+        'RESET_VERIFIKASI'
+      ) {
+
+        pesan =
+
+          `Buka kembali data ini untuk AUDIT?\n\n` +
+
+          `Desa: ${
+            item.desa || '-'
+          }\n` +
+
+          `TPS: ${
+            item.tps || '-'
+          }\n\n` +
+
+          `Status akan dikembalikan menjadi:\n` +
+
+          `MEMERLUKAN VERIFIKASI ADMIN`;
+
+      }
+
+
+      if (
+        !confirm(pesan)
+      ) {
+
+        return;
+
+      }
+
+
+      try {
+
+        const adminNama =
+          localStorage.getItem(
+            'adminNama'
+          ) ||
+          'Admin';
+
+
+        const res =
+          await fetch(
+            '/api/admin-verifikasi',
+            {
+
+              method: 'POST',
+
+              headers: {
+
+                'Content-Type':
+                  'application/json'
+
+              },
+
+              body:
+                JSON.stringify({
+
+                  id:
+                    item.id,
+
+                  action,
+
+                  admin_nama:
+                    adminNama
+
+                })
+
+            }
+          );
+
+
+        const result =
+          await res.json();
+
+
+        if (
+          !res.ok ||
+          !result.ok
+        ) {
+
+          throw new Error(
+
+            result.error ||
+
+            'Gagal melakukan verifikasi'
+
+          );
+
+        }
+
+
+        alert(
+
+          result.message ||
+
+          'Berhasil'
+
+        );
+
+
+        await fetchAdminData();
+
+
+      } catch (err) {
+
+        console.error(
+          'ADMIN VERIFY ERROR:',
+          err
+        );
+
+
+        alert(
+          `Gagal: ${
+            err.message
+          }`
+        );
+
+      }
 
     }
 
 
-    /*
-    =======================================================
-    FALLBACK
-    =======================================================
-    */
+    /* ====================================================
+       OPEN EDIT MODAL
+    ==================================================== */
 
-    return res
-      .status(400)
-      .json({
+    function openEditModal(id) {
 
-        ok: false,
-
-        error:
-          'Aksi tidak dapat diproses.'
-
-      });
+      const item =
+        globalData.find(
+          d =>
+            String(d.id) ===
+            String(id)
+        );
 
 
-  } catch (err) {
+      if (!item) {
 
-    console.error(
-      '[ADMIN VERIFIKASI] ERROR:',
-      err
+        alert(
+          'Data TPS tidak ditemukan.'
+        );
+
+        return;
+
+      }
+
+
+      editingId =
+        item.id;
+
+
+      document.getElementById(
+        'editLocation'
+      ).innerText =
+
+        `${item.kecamatan || '-'} / ` +
+
+        `${item.desa || '-'} / ` +
+
+        `TPS ${item.tps || '-'}`;
+
+
+      document.getElementById(
+        'editCalon01'
+      ).value =
+        Number(
+          item.suara_calon_01 || 0
+        );
+
+
+      document.getElementById(
+        'editCalon02'
+      ).value =
+        Number(
+          item.suara_calon_02 || 0
+        );
+
+
+      document.getElementById(
+        'editCalon03'
+      ).value =
+        Number(
+          item.suara_calon_03 || 0
+        );
+
+
+      document.getElementById(
+        'editCalon04'
+      ).value =
+        Number(
+          item.suara_calon_04 || 0
+        );
+
+
+      document.getElementById(
+        'editCalon05'
+      ).value =
+        Number(
+          item.suara_calon_05 || 0
+        );
+
+
+      document.getElementById(
+        'editTidakSah'
+      ).value =
+        Number(
+          item.suara_tidak_sah || 0
+        );
+
+
+      updateEditTotal();
+
+
+      document.getElementById(
+        'editModal'
+      ).classList.remove(
+        'hidden'
+      );
+
+
+      document.getElementById(
+        'editModal'
+      ).classList.add(
+        'flex'
+      );
+
+    }
+
+
+    /* ====================================================
+       CLOSE EDIT MODAL
+    ==================================================== */
+
+    function closeEditModal() {
+
+      editingId =
+        null;
+
+
+      const modal =
+        document.getElementById(
+          'editModal'
+        );
+
+
+      modal.classList.add(
+        'hidden'
+      );
+
+
+      modal.classList.remove(
+        'flex'
+      );
+
+    }
+
+
+    /* ====================================================
+       UPDATE TOTAL PREVIEW
+    ==================================================== */
+
+    function updateEditTotal() {
+
+      const ids = [
+
+        'editCalon01',
+
+        'editCalon02',
+
+        'editCalon03',
+
+        'editCalon04',
+
+        'editCalon05',
+
+        'editTidakSah'
+
+      ];
+
+
+      let total = 0;
+
+
+      ids.forEach(
+        id => {
+
+          const value =
+            Number(
+              document.getElementById(
+                id
+              ).value
+            );
+
+
+          if (
+            Number.isFinite(value)
+          ) {
+
+            total +=
+              Math.max(
+                0,
+                Math.floor(value)
+              );
+
+          }
+
+        }
+      );
+
+
+      document.getElementById(
+        'editTotal'
+      ).innerText =
+        total;
+
+    }
+
+
+    /* ====================================================
+       INPUT TOTAL EVENTS
+    ==================================================== */
+
+    [
+
+      'editCalon01',
+
+      'editCalon02',
+
+      'editCalon03',
+
+      'editCalon04',
+
+      'editCalon05',
+
+      'editTidakSah'
+
+    ].forEach(
+      id => {
+
+        document.addEventListener(
+          'input',
+          event => {
+
+            if (
+              event.target.id ===
+              id
+            ) {
+
+              updateEditTotal();
+
+            }
+
+          }
+        );
+
+      }
     );
 
-    return res
-      .status(500)
-      .json({
 
-        ok: false,
+    /* ====================================================
+       SUBMIT EDIT
+    ==================================================== */
 
-        error:
-          err?.message ||
-          'Server error'
+    async function submitEditData() {
 
-      });
+      if (!editingId) {
 
-  }
+        alert(
+          'Data yang diedit tidak ditemukan.'
+        );
 
-}
+        return;
+
+      }
+
+
+      const data = {
+
+        suara_calon_01:
+          Number(
+            document.getElementById(
+              'editCalon01'
+            ).value || 0
+          ),
+
+        suara_calon_02:
+          Number(
+            document.getElementById(
+              'editCalon02'
+            ).value || 0
+          ),
+
+        suara_calon_03:
+          Number(
+            document.getElementById(
+              'editCalon03'
+            ).value || 0
+          ),
+
+        suara_calon_04:
+          Number(
+            document.getElementById(
+              'editCalon04'
+            ).value || 0
+          ),
+
+        suara_calon_05:
+          Number(
+            document.getElementById(
+              'editCalon05'
+            ).value || 0
+          ),
+
+        suara_tidak_sah:
+          Number(
+            document.getElementById(
+              'editTidakSah'
+            ).value || 0
+          )
+
+      };
+
+
+      /*
+       * Normalisasi sisi browser.
+       */
+
+      Object.keys(data)
+        .forEach(
+          key => {
+
+            if (
+              !Number.isFinite(
+                data[key]
+              ) ||
+              data[key] < 0
+            ) {
+
+              data[key] = 0;
+
+            }
+
+            data[key] =
+              Math.floor(
+                data[key]
+              );
+
+          }
+        );
+
+
+      const totalPreview =
+        Object.values(data)
+          .reduce(
+            (
+              sum,
+              value
+            ) =>
+              sum + value,
+            0
+          );
+
+
+      const item =
+        globalData.find(
+          d =>
+            String(d.id) ===
+            String(editingId)
+        );
+
+
+      const pesan =
+
+        `Simpan perubahan data?\n\n` +
+
+        `Desa: ${
+          item?.desa || '-'
+        }\n` +
+
+        `TPS: ${
+          item?.tps || '-'
+        }\n\n` +
+
+        `01: ${
+          data.suara_calon_01
+        }\n` +
+
+        `02: ${
+          data.suara_calon_02
+        }\n` +
+
+        `03: ${
+          data.suara_calon_03
+        }\n` +
+
+        `04: ${
+          data.suara_calon_04
+        }\n` +
+
+        `05: ${
+          data.suara_calon_05
+        }\n` +
+
+        `Tidak Sah: ${
+          data.suara_tidak_sah
+        }\n\n` +
+
+        `Total: ${
+          totalPreview
+        }\n\n` +
+
+        `Data akan disahkan oleh admin.`;
+
+
+      if (
+        !confirm(pesan)
+      ) {
+
+        return;
+
+      }
+
+
+      try {
+
+        const adminNama =
+          localStorage.getItem(
+            'adminNama'
+          ) ||
+          'Admin';
+
+
+        const res =
+          await fetch(
+            '/api/admin-verifikasi',
+            {
+
+              method: 'POST',
+
+              headers: {
+
+                'Content-Type':
+                  'application/json'
+
+              },
+
+              body:
+                JSON.stringify({
+
+                  id:
+                    editingId,
+
+                  action:
+                    'UBAH_DATA',
+
+                  admin_nama:
+                    adminNama,
+
+                  data
+
+                })
+
+            }
+          );
+
+
+        const result =
+          await res.json();
+
+
+        if (
+          !res.ok ||
+          !result.ok
+        ) {
+
+          throw new Error(
+
+            result.error ||
+
+            'Gagal mengubah data'
+
+          );
+
+        }
+
+
+        closeEditModal();
+
+
+        alert(
+
+          result.message ||
+
+          'Data berhasil diubah.'
+
+        );
+
+
+        await fetchAdminData();
+
+
+      } catch (err) {
+
+        console.error(
+          'UBAH DATA ERROR:',
+          err
+        );
+
+
+        alert(
+          `Gagal: ${
+            err.message
+          }`
+        );
+
+      }
+
+    }
+
+
+    /* ====================================================
+       LOGOUT
+    ==================================================== */
+
+    function logoutAdmin() {
+
+      localStorage.removeItem(
+        "adminToken"
+      );
+
+      localStorage.removeItem(
+        "adminNama"
+      );
+
+
+      window.location.href =
+        "/login";
+
+    }
+
+
+    /* ====================================================
+       CLOSE MODAL KLIK LUAR
+    ==================================================== */
+
+    document.getElementById(
+      'editModal'
+    ).addEventListener(
+      'click',
+      function(event) {
+
+        if (
+          event.target ===
+          this
+        ) {
+
+          closeEditModal();
+
+        }
+
+      }
+    );
+
+
+  </script>
+
+
+  <!-- =====================================================
+       STYLE INPUT MODAL
+  ====================================================== -->
+
+  <style>
+
+    .edit-input {
+
+      width: 100%;
+
+      padding: 10px 12px;
+
+      background:
+        rgb(15 23 42);
+
+      border:
+        1px solid
+        rgb(51 65 85);
+
+      border-radius:
+        8px;
+
+      color:
+        white;
+
+      outline:
+        none;
+
+    }
+
+
+    .edit-input:focus {
+
+      border-color:
+        rgb(59 130 246);
+
+      box-shadow:
+        0 0 0 2px
+        rgb(59 130 246 / 20%);
+
+    }
+
+
+    .edit-input::-webkit-inner-spin-button,
+    .edit-input::-webkit-outer-spin-button {
+
+      opacity:
+        1;
+
+    }
+
+  </style>
+
+</body>
+</html>
