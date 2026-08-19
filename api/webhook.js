@@ -198,6 +198,27 @@ function buildSummaryText(tps, voteObj, jumlahCalon) {
 
 async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas) {
   try {
+    // 1. LANGSUNG UPDATE DATABASE DI AWAL AGAR STATUS INSTAN BERUBAH
+    const { data: dbHasilAwal } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
+    
+    if (!dbHasilAwal) {
+      await supabase.from('hasil_suara').insert({
+        kecamatan: petugas.kecamatan, 
+        desa: petugas.desa, 
+        tps: tpsTarget, 
+        nrp_saksi: petugas.nrp, 
+        nama_saksi: petugas.nama_petugas,
+        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', 
+        telegram_photo_file_id: fileId
+      });
+    } else {
+      await supabase.from('hasil_suara').update({
+        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI',
+        telegram_photo_file_id: fileId
+      }).eq('id', dbHasilAwal.id);
+    }
+
+    // 2. DOWNLOAD FILE DARI TELEGRAM
     const imageBuffer = await downloadTelegramFile(fileId);
     
     const cleanKec = String(petugas.kecamatan || 'kec').toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -205,6 +226,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     const cleanTps = String(tpsTarget || '1').toLowerCase().replace(/[^a-z0-9]/g, '_');
     const customFileName = `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;
 
+    // 3. KIRIM KE GOOGLE DRIVE (GAS AKAN TIMPA FILE LAMA JIKA NAMA SAMA)
     let googleDriveUrl = null;
     if (GDRIVE_WEBHOOK_URL) {
       try {
@@ -226,38 +248,20 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       }
     }
 
-    // 1. AMBIL DATA HASIL SUARA YANG SUDAH ADA DI DATABASE
-    const { data: dbHasil } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
-    
-    // 2. SIMPAN FILE ID DAN URL DRIVE KE DATABASE TERLEBIH DAHULU AGAR STATUS LANGSUNG BERUBAH
-    if (!dbHasil) {
-      const payloadPlano = {
-        kecamatan: petugas.kecamatan, 
-        desa: petugas.desa, 
-        tps: tpsTarget, 
-        nrp_saksi: petugas.nrp, 
-        nama_saksi: petugas.nama_petugas,
-        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', 
-        telegram_photo_file_id: fileId, 
-        google_drive_url: googleDriveUrl
-      };
-      await supabase.from('hasil_suara').upsert(payloadPlano, { onConflict: 'kecamatan,desa,tps' });
-    } else {
+    if (googleDriveUrl) {
       await supabase.from('hasil_suara').update({
-        status_verifikasi: dbHasil.status_verifikasi === 'PLANO BELUM TERUNGGAH' ? 'FOTO PLANO BELUM TERVERIFIKASI' : dbHasil.status_verifikasi,
-        telegram_photo_file_id: fileId,
         google_drive_url: googleDriveUrl
-      }).eq('id', dbHasil.id);
+      }).eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget);
     }
 
-    // 3. JALANKAN OCR SECARA AMAN (TERPISAH)
+    // 4. JALANKAN OCR SECARA AMAN
     let ocrText = '';
     try {
       const ocr = await runOCR(imageBuffer);
       ocrText = ocr?.text || '';
     } catch (ocrErr) {
       console.error("Proses OCR gagal/timeout:", ocrErr);
-      return; // Foto sudah tersimpan, hentikan proses OCR jika gagal
+      return; 
     }
 
     if (!ocrText) return;
@@ -266,10 +270,8 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     const jumlahCalon = mDesa?.jumlah_calon || 2;
     const ocrRes = parseOCRVotes(ocrText, jumlahCalon);
     
-    // Ambil data terbaru setelah update awal
     const { data: dbHasilTerbaru } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
     if (!dbHasilTerbaru || dbHasilTerbaru.suara_calon_01 === null || dbHasilTerbaru.suara_calon_01 === undefined) {
-      // Jika belum ada input manual, cukup simpan hasil OCR
       await supabase.from('hasil_suara').update({
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
       }).eq('id', dbHasilTerbaru.id);
@@ -287,7 +289,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       return;
     }
 
-    // Bandingkan dengan input manual jika sudah ada
     let isMatch = true;
     for (let i = 1; i <= jumlahCalon; i++) {
       const key = `calon_${String(i).padStart(2, '0')}`;
@@ -307,7 +308,6 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         kecamatan: petugas.kecamatan,
         desa: petugas.desa,
         tps: tpsTarget,
-        data_sebelum: { status_verifikasi: dbHasilTerbaru.status_verifikasi },
         data_sesudah: { status_verifikasi: 'AUTO VERIFIED' },
         keterangan: `Foto Plano TPS ${tpsTarget} terverifikasi otomatis (Sesuai dengan input manual)`
       });
@@ -421,7 +421,6 @@ export default async function handler(req, res) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
       const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
       if (petugas) {
-        // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
         await supabase.from('master_petugas').update({ mode_input: null, tps_aktif: null }).eq('nrp', petugas.nrp);
         await logAktivitas({
           jenis_aksi: 'BATAL_PROSES',
@@ -441,7 +440,6 @@ export default async function handler(req, res) {
     if (waitUser) {
       if (!text.startsWith('/')) {
         if (text === String(waitUser.pin ?? '').trim()) {
-          // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris untuk mengubah WAIT_ menjadi chatId murni
           const { error: updateErr } = await supabase
             .from('master_petugas')
             .update({ chat_id_telegram: chatId })
@@ -612,7 +610,6 @@ export default async function handler(req, res) {
 
     if (command === '/kirimhasil' || command === '/edithasil') {
       const isEditMode = command === '/edithasil';
-      // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
       await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('nrp', petugas.nrp);
 
       await logAktivitas({
@@ -646,7 +643,6 @@ export default async function handler(req, res) {
     }
 
     if (command === '/kirimplano') {
-      // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
       await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('nrp', petugas.nrp);
       
       await logAktivitas({
@@ -673,7 +669,7 @@ export default async function handler(req, res) {
 
       const largestPhoto = message.photo[message.photo.length - 1];
 
-      // Cek apakah foto plano untuk TPS ini sudah pernah diunggah sebelumnya
+      // Cek apakah foto plano untuk TPS ini sudah pernah diunggah sebelumnya (berdasarkan status atau file ID)
       const { data: cekHasil } = await supabase
         .from('hasil_suara')
         .select('*')
@@ -682,7 +678,7 @@ export default async function handler(req, res) {
         .eq('tps', petugas.tps_aktif)
         .maybeSingle();
 
-      if (cekHasil && cekHasil.telegram_photo_file_id) {
+      if (cekHasil && (cekHasil.telegram_photo_file_id || cekHasil.status_verifikasi !== 'PLANO BELUM TERUNGGAH')) {
         const keyboard = {
           inline_keyboard: [
             [{ text: '⚠️ YA, TIMPA / REPLACE FOTO', callback_data: `REPLACE_PLANO_${petugas.tps_aktif}_${largestPhoto.file_id}` }],
@@ -700,7 +696,6 @@ export default async function handler(req, res) {
 
     if (text.startsWith('📍 TPS')) {
       const tpsSelected = text.replace('📍 TPS', '').trim();
-      // [PEMBENAHAN] Menggunakan nrp sebagai pengenal baris
       await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('nrp', petugas.nrp);
 
       await logAktivitas({
