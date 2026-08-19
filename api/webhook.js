@@ -395,7 +395,8 @@ export default async function handler(req, res) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
       const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
       if (petugas) {
-        await supabase.from('master_petugas').update({ mode_input: null, tps_aktif: null }).eq('id', petugas.id);
+        // [PEMBENAHAN] Mengubah id menjadi idx
+        await supabase.from('master_petugas').update({ mode_input: null, tps_aktif: null }).eq('idx', petugas.idx);
         await logAktivitas({
           jenis_aksi: 'BATAL_PROSES',
           nrp_saksi: petugas.nrp,
@@ -414,7 +415,8 @@ export default async function handler(req, res) {
     if (waitUser) {
       if (!text.startsWith('/')) {
         if (text === String(waitUser.pin ?? '').trim()) {
-          await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
+          // [PEMBENAHAN] Mengubah id menjadi idx
+          await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('idx', waitUser.idx);
 
           await logAktivitas({
             jenis_aksi: 'REGISTRASI_SUKSES',
@@ -575,7 +577,8 @@ export default async function handler(req, res) {
 
     if (command === '/kirimhasil' || command === '/edithasil') {
       const isEditMode = command === '/edithasil';
-      await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('id', petugas.id);
+      // [PEMBENAHAN] Mengubah id menjadi idx
+      await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('idx', petugas.idx);
 
       await logAktivitas({
         jenis_aksi: isEditMode ? 'MODE_EDIT_HASIL' : 'MODE_KIRIM_HASIL',
@@ -608,7 +611,8 @@ export default async function handler(req, res) {
     }
 
     if (command === '/kirimplano') {
-      await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('id', petugas.id);
+      // [PEMBENAHAN] Mengubah id menjadi idx
+      await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('idx', petugas.idx);
       
       await logAktivitas({
         jenis_aksi: 'MODE_KIRIM_PLANO',
@@ -641,7 +645,8 @@ export default async function handler(req, res) {
 
     if (text.startsWith('📍 TPS')) {
       const tpsSelected = text.replace('📍 TPS', '').trim();
-      await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('id', petugas.id);
+      // [PEMBENAHAN] Mengubah id menjadi idx
+      await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('idx', petugas.idx);
 
       await logAktivitas({
         jenis_aksi: 'PILIH_TPS',
@@ -883,7 +888,7 @@ async function handleCallback(cb) {
         desa: petugas.desa,
         tps: h.tps,
         data_sebelum: {
-          suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: h.total_suara_masuk
+          suara_calon_01: h.suara_calon_01, suara_calon_02: h.suara_calon_02, suara_tidak_sah: h.suara_tidak_sah, total_suara_masuk: h.total_suara_masuk
         },
         data_sesudah: {
           suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal
