@@ -38,17 +38,17 @@
       </div>
     </div>
 
-    <!-- ELEMEN DROPDOWN FILTER -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- ELEMEN DROPDOWN FILTER (Kecamatan, Desa, TPS & Pilihan Baris) -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">Filter Kecamatan</label>
-        <select id="filterKec" onchange="applyFilters()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <select id="filterKec" onchange="onKecChange()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
           <option value="">-- Semua Kecamatan --</option>
         </select>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">Filter Desa</label>
-        <select id="filterDesa" onchange="applyFilters()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <select id="filterDesa" onchange="onDesaChange()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
           <option value="">-- Semua Desa --</option>
         </select>
       </div>
@@ -56,6 +56,14 @@
         <label class="block text-xs font-semibold text-slate-400 mb-1">Filter TPS</label>
         <select id="filterTPS" onchange="applyFilters()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
           <option value="">-- Semua TPS --</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">Tampilkan Baris</label>
+        <select id="rowsPerPage" onchange="applyFilters()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option value="10" selected>10 Baris</option>
+          <option value="25">25 Baris</option>
+          <option value="50">50 Baris</option>
         </select>
       </div>
     </div>
@@ -80,8 +88,8 @@
       </div>
     </div>
 
-    <!-- KARTU PERSENTASE PEROLEHAN SUARA DINAMIS -->
-    <div class="mb-6">
+    <!-- KARTU PEROLEHAN SUARA CALON (Hanya muncul jika Filter Desa atau TPS aktif) -->
+    <div id="calonCardsSection" class="mb-6 hidden">
       <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Perolehan Suara Calon</h3>
       <div id="calonCardsContainer" class="grid grid-cols-2 md:grid-cols-5 gap-4">
         <!-- Dimuat dinamis lewat JavaScript -->
@@ -90,9 +98,12 @@
 
     <!-- Tabel Detail Log TPS -->
     <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-6">
-      <h2 class="text-lg font-bold text-white mb-4 flex items-center space-x-2">
-        <span>📋 Rincian Perolehan Suara TPS</span>
-      </h2>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+          <span>📋 Livecount Hasil Suara TPS</span>
+        </h2>
+        <span id="showingRowsText" class="text-xs text-slate-400 font-mono"></span>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm border-collapse">
           <thead>
@@ -175,23 +186,54 @@
 
     function populateDropdowns(data) {
       const kecSelect = document.getElementById("filterKec");
-      const desaSelect = document.getElementById("filterDesa");
-      const tpsSelect = document.getElementById("filterTPS");
-
       const selectedKec = kecSelect.value;
-      const selectedDesa = desaSelect.value;
-      const selectedTPS = tpsSelect.value;
 
-      const kecList = [...new Set(data.map(item => item.kecamatan).filter(Boolean))];
-      const desaList = [...new Set(data.map(item => item.desa).filter(Boolean))];
-      const tpsList = [...new Set(data.map(item => item.tps).filter(Boolean))];
+      const kecList = [...new Set(data.map(item => item.kecamatan).filter(Boolean))].sort();
 
       kecSelect.innerHTML = '<option value="">-- Semua Kecamatan --</option>' + 
         kecList.map(k => `<option value="${k}" ${k === selectedKec ? 'selected' : ''}>${k}</option>`).join('');
 
+      populateDesaAndTPS();
+    }
+
+    function onKecChange() {
+      populateDesaAndTPS();
+      applyFilters();
+    }
+
+    function onDesaChange() {
+      populateTPSOnly();
+      applyFilters();
+    }
+
+    function populateDesaAndTPS() {
+      const kecVal = document.getElementById("filterKec").value;
+      const desaSelect = document.getElementById("filterDesa");
+      const selectedDesa = desaSelect.value;
+
+      let filteredData = rawData;
+      if (kecVal !== "") {
+        filteredData = rawData.filter(item => item.kecamatan === kecVal);
+      }
+
+      const desaList = [...new Set(filteredData.map(item => item.desa).filter(Boolean))].sort();
       desaSelect.innerHTML = '<option value="">-- Semua Desa --</option>' + 
         desaList.map(d => `<option value="${d}" ${d === selectedDesa ? 'selected' : ''}>${d}</option>`).join('');
 
+      populateTPSOnly();
+    }
+
+    function populateTPSOnly() {
+      const kecVal = document.getElementById("filterKec").value;
+      const desaVal = document.getElementById("filterDesa").value;
+      const tpsSelect = document.getElementById("filterTPS");
+      const selectedTPS = tpsSelect.value;
+
+      let filteredData = rawData;
+      if (kecVal !== "") filteredData = filteredData.filter(item => item.kecamatan === kecVal);
+      if (desaVal !== "") filteredData = filteredData.filter(item => item.desa === desaVal);
+
+      const tpsList = [...new Set(filteredData.map(item => item.tps).filter(Boolean))].sort((a,b) => Number(a) - Number(b));
       tpsSelect.innerHTML = '<option value="">-- Semua TPS --</option>' + 
         tpsList.map(t => `<option value="${t}" ${t === selectedTPS ? 'selected' : ''}>${t}</option>`).join('');
     }
@@ -200,16 +242,35 @@
       const kecVal = document.getElementById("filterKec").value;
       const desaVal = document.getElementById("filterDesa").value;
       const tpsVal = document.getElementById("filterTPS").value;
+      const rowsLimit = parseInt(document.getElementById("rowsPerPage").value, 10) || 10;
 
-      const filtered = rawData.filter(item => {
+      // Filter data
+      let filtered = rawData.filter(item => {
         return (kecVal === "" || item.kecamatan === kecVal) &&
                (desaVal === "" || item.desa === desaVal) &&
                (tpsVal === "" || item.tps === tpsVal);
       });
 
+      // Urutkan data terbaru di paling atas (Timestamp/ID Descending)
+      filtered.sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        if (timeA !== timeB) return timeB - timeA;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+
+      // KONTROL TAMPILAN KARTU CALON:
+      // Hanya tampil jika Filter Desa atau Filter TPS aktif!
+      const calonSection = document.getElementById("calonCardsSection");
+      if (desaVal !== "" || tpsVal !== "") {
+        calonSection.classList.remove("hidden");
+        renderCalonCards(filtered);
+      } else {
+        calonSection.classList.add("hidden");
+      }
+
       renderDashboardStats(filtered);
-      renderCalonCards(filtered);
-      renderTable(filtered);
+      renderTable(filtered, rowsLimit);
     }
 
     function renderDashboardStats(data) {
@@ -274,18 +335,25 @@
       }
     }
 
-    function renderTable(data) {
+    function renderTable(data, limit) {
       const tbody = document.getElementById("tableBody");
+      const showingText = document.getElementById("showingRowsText");
       tbody.innerHTML = "";
 
       if (data.length === 0) {
         tbody.innerHTML = `<tr><td colspan="12" class="text-center py-8 text-slate-500">Tidak ada data TPS yang sesuai filter.</td></tr>`;
+        showingText.innerText = "Menampilkan 0 data";
         return;
       }
 
-      data.forEach(item => {
+      // Potong data sesuai limit pilihan (10 / 25 / 50)
+      const slicedData = data.slice(0, limit);
+      showingText.innerText = `Menampilkan ${slicedData.length} dari ${data.length} data terbaru`;
+
+      slicedData.forEach(item => {
         const jml = Number(item.jumlah_calon || 2);
 
+        // Jika calon tidak ada (misal hanya 2 calon), tampilkan '-'
         const c1 = item.suara_calon_01 !== null && item.suara_calon_01 !== undefined ? item.suara_calon_01 : 0;
         const c2 = item.suara_calon_02 !== null && item.suara_calon_02 !== undefined ? item.suara_calon_02 : 0;
         const c3 = jml >= 3 ? (item.suara_calon_03 !== null && item.suara_calon_03 !== undefined ? item.suara_calon_03 : 0) : '-';
