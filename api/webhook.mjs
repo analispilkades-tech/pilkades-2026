@@ -1,9 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { createWorker } from 'tesseract.js';
 import { waitUntil } from '@vercel/functions';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
