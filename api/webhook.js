@@ -599,36 +599,47 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     ocrRes.total = ocrTotal;
 
     /*
-     * =========================================================
-     * 9. SIMPAN HASIL OCR KE plano_uploads
-     * =========================================================
-     */
+ * =========================================================
+ * 9. SIMPAN HASIL OCR KE plano_uploads
+ * =========================================================
+ */
 
-    const { error: ocrUpdateError } = await supabase
-      .from('plano_uploads')
-      .update({
-        ocr_status: 'COMPLETED',
-        ocr_engine: 'Tesseract.js 5.0.5',
-        ocr_text: ocrText,
-        ocr_calon_01: ocrRes.calon_01,
-        ocr_calon_02: ocrRes.calon_02,
-        ocr_calon_03: ocrRes.calon_03,
-        ocr_calon_04: ocrRes.calon_04,
-        ocr_calon_05: ocrRes.calon_05,
-        ocr_tidak_sah: ocrRes.tidak_sah,
-        ocr_total_suara: ocrTotal,
-        ocr_confidence: confidence,
-        ocr_processed_at: new Date().toISOString(),
-        ocr_error: null
-      })
-      .eq('id', planoUploadId);
+console.log(
+  `[OCR] Menyimpan hasil OCR ke plano_uploads ID=${planoUploadId}...`
+);
 
-    if (ocrUpdateError) {
-      console.error(
-        '[OCR] Gagal menyimpan hasil OCR:',
-        ocrUpdateError.message
-      );
-    }
+const { error: ocrUpdateError } = await supabase
+  .from('plano_uploads')
+  .update({
+    ocr_status: 'COMPLETED',
+    ocr_engine: 'Tesseract.js 5.0.5',
+    ocr_text: ocrText,
+    ocr_calon_01: ocrRes.calon_01,
+    ocr_calon_02: ocrRes.calon_02,
+    ocr_calon_03: ocrRes.calon_03,
+    ocr_calon_04: ocrRes.calon_04,
+    ocr_calon_05: ocrRes.calon_05,
+    ocr_tidak_sah: ocrRes.tidak_sah,
+    ocr_total_suara: ocrTotal,
+    ocr_confidence: confidence,
+    ocr_processed_at: new Date().toISOString(),
+    ocr_error: null
+  })
+  .eq('id', planoUploadId);
+
+if (ocrUpdateError) {
+
+  console.error(
+    `[OCR] GAGAL menyimpan hasil OCR ID=${planoUploadId}:`,
+    ocrUpdateError.message
+  );
+
+} else {
+
+  console.log(
+    `[OCR] Hasil OCR berhasil disimpan ID=${planoUploadId}`
+  );
+}
 
     /*
      * =========================================================
