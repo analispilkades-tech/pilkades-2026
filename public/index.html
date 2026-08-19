@@ -38,24 +38,24 @@
       </div>
     </div>
 
-    <!-- ELEMEN DROPDOWN FILTER -->
+    <!-- ELEMEN DROPDOWN FILTER BERUNTUN (CASCADING) -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">Filter Kecamatan</label>
         <select id="filterKec" onchange="onKecChange()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-          <option value="">-- Semua Kecamatan --</option>
+          <option value="">-- Pilih Kecamatan --</option>
         </select>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">Filter Desa</label>
-        <select id="filterDesa" onchange="onDesaChange()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-          <option value="">-- Semua Desa --</option>
+        <select id="filterDesa" onchange="onDesaChange()" disabled class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
+          <option value="">-- Pilih Kecamatan Dahulu --</option>
         </select>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">Filter TPS</label>
-        <select id="filterTPS" onchange="applyFilters()" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-          <option value="">-- Semua TPS --</option>
+        <select id="filterTPS" onchange="applyFilters()" disabled class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
+          <option value="">-- Pilih Desa Dahulu --</option>
         </select>
       </div>
       <div>
@@ -183,7 +183,7 @@
         const fetchedData = Array.isArray(result.data) ? result.data : [];
         rawData = fetchedData.filter(d => d.status_verifikasi !== 'REJECTED');
         
-        populateDropdowns();
+        populateKecamatan();
         applyFilters();
         updateLogList(rawData);
       } catch (err) {
@@ -191,60 +191,85 @@
       }
     }
 
-    function populateDropdowns() {
+    function populateKecamatan() {
       const kecSelect = document.getElementById("filterKec");
       const currentKec = kecSelect.value;
 
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
       const kecList = [...new Set(dataSource.map(item => String(item.kecamatan || '').trim()).filter(Boolean))].sort();
 
-      kecSelect.innerHTML = '<option value="">-- Semua Kecamatan --</option>' + 
+      kecSelect.innerHTML = '<option value="">-- Pilih Kecamatan --</option>' + 
         kecList.map(k => `<option value="${k}" ${k.toUpperCase() === currentKec.toUpperCase() ? 'selected' : ''}>${k}</option>`).join('');
-
-      populateDesaAndTPS();
     }
 
     function onKecChange() {
-      populateDesaAndTPS();
+      const kecVal = document.getElementById("filterKec").value.trim();
+      const desaSelect = document.getElementById("filterDesa");
+      const tpsSelect = document.getElementById("filterTPS");
+
+      if (kecVal === "") {
+        // Jika Kecamatan dikosongkan, reset dan kunci Desa & TPS
+        desaSelect.innerHTML = '<option value="">-- Pilih Kecamatan Dahulu --</option>';
+        desaSelect.disabled = true;
+        tpsSelect.innerHTML = '<option value="">-- Pilih Desa Dahulu --</option>';
+        tpsSelect.disabled = true;
+      } else {
+        // Aktifkan dan isi data Desa berdasarkan Kecamatan terpilih
+        desaSelect.disabled = false;
+        populateDesa();
+      }
+
+      // Reset TPS
+      tpsSelect.innerHTML = '<option value="">-- Pilih Desa Dahulu --</option>';
+      tpsSelect.disabled = true;
+
       applyFilters();
     }
 
-    function onDesaChange() {
-      populateTPSOnly();
-      applyFilters();
-    }
-
-    function populateDesaAndTPS() {
+    function populateDesa() {
       const kecVal = document.getElementById("filterKec").value.toUpperCase().trim();
       const desaSelect = document.getElementById("filterDesa");
       const currentDesa = desaSelect.value;
 
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
-      let filtered = dataSource;
-      if (kecVal !== "") {
-        filtered = dataSource.filter(item => String(item.kecamatan || '').toUpperCase().trim() === kecVal);
-      }
+      let filtered = dataSource.filter(item => String(item.kecamatan || '').toUpperCase().trim() === kecVal);
 
       const desaList = [...new Set(filtered.map(item => String(item.desa || '').trim()).filter(Boolean))].sort();
-      desaSelect.innerHTML = '<option value="">-- Semua Desa --</option>' + 
+      desaSelect.innerHTML = '<option value="">-- Pilih Desa --</option>' + 
         desaList.map(d => `<option value="${d}" ${d.toUpperCase() === currentDesa.toUpperCase() ? 'selected' : ''}>${d}</option>`).join('');
-
-      populateTPSOnly();
     }
 
-    function populateTPSOnly() {
+    function onDesaChange() {
+      const desaVal = document.getElementById("filterDesa").value.trim();
+      const tpsSelect = document.getElementById("filterTPS");
+
+      if (desaVal === "") {
+        // Jika Desa dikosongkan, reset dan kunci TPS
+        tpsSelect.innerHTML = '<option value="">-- Pilih Desa Dahulu --</option>';
+        tpsSelect.disabled = true;
+      } else {
+        // Aktifkan dan isi data TPS berdasarkan Desa terpilih
+        tpsSelect.disabled = false;
+        populateTPS();
+      }
+
+      applyFilters();
+    }
+
+    function populateTPS() {
       const kecVal = document.getElementById("filterKec").value.toUpperCase().trim();
       const desaVal = document.getElementById("filterDesa").value.toUpperCase().trim();
       const tpsSelect = document.getElementById("filterTPS");
       const currentTPS = tpsSelect.value;
 
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
-      let filtered = dataSource;
-      if (kecVal !== "") filtered = filtered.filter(item => String(item.kecamatan || '').toUpperCase().trim() === kecVal);
-      if (desaVal !== "") filtered = filtered.filter(item => String(item.desa || '').toUpperCase().trim() === desaVal);
+      let filtered = dataSource.filter(item => 
+        String(item.kecamatan || '').toUpperCase().trim() === kecVal && 
+        String(item.desa || '').toUpperCase().trim() === desaVal
+      );
 
       const tpsList = [...new Set(filtered.map(item => String(item.tps || '').trim()).filter(Boolean))].sort((a,b) => Number(a) - Number(b));
-      tpsSelect.innerHTML = '<option value="">-- Semua TPS --</option>' + 
+      tpsSelect.innerHTML = '<option value="">-- Pilih TPS --</option>' + 
         tpsList.map(t => `<option value="${t}" ${t.toUpperCase() === currentTPS.toUpperCase() ? 'selected' : ''}>${t}</option>`).join('');
     }
 
