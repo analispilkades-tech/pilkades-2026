@@ -877,61 +877,61 @@ async function handlePhoto(
 
     const ocrUpdate = {
 
-  ocr_text:
-    ocrText,
+      ocr_text:
+        ocrText,
 
-  ocr_calon_01:
-    parsed.calon_01,
+      ocr_calon_01:
+        parsed.calon_01,
 
-  ocr_calon_02:
-    parsed.calon_02,
+      ocr_calon_02:
+        parsed.calon_02,
 
-  ocr_calon_03:
-    parsed.calon_03,
+      ocr_calon_03:
+        parsed.calon_03,
 
-  ocr_calon_04:
-    parsed.calon_04,
+      ocr_calon_04:
+        parsed.calon_04,
 
-  ocr_calon_05:
-    parsed.calon_05,
+      ocr_calon_05:
+        parsed.calon_05,
 
-  ocr_tidak_sah:
-    parsed.tidak_sah,
+      ocr_tidak_sah:
+        parsed.tidak_sah,
 
-  ocr_total_suara:
-    [
-      parsed.calon_01,
-      parsed.calon_02,
-      parsed.calon_03,
-      parsed.calon_04,
-      parsed.calon_05,
-      parsed.tidak_sah
-    ]
-      .filter(
-        value =>
-          Number.isInteger(value)
-      )
-      .reduce(
-        (sum, value) =>
-          sum + value,
-        0
-      ),
+      ocr_total_suara:
+        [
+          parsed.calon_01,
+          parsed.calon_02,
+          parsed.calon_03,
+          parsed.calon_04,
+          parsed.calon_05,
+          parsed.tidak_sah
+        ]
+          .filter(
+            value =>
+              Number.isInteger(value)
+          )
+          .reduce(
+            (sum, value) =>
+              sum + value,
+            0
+          ),
 
-  ocr_confidence:
-    parsed.confidence,
+      ocr_confidence:
+        parsed.confidence,
 
-  ocr_engine:
-    'TESSERACT.JS',
+      ocr_engine:
+        'TESSERACT.JS',
 
-  ocr_status:
-    parsed.complete
-      ? 'COMPLETE'
-      : 'INCOMPLETE',
+      ocr_status:
+        parsed.complete
+          ? 'COMPLETE'
+          : 'INCOMPLETE',
 
-  ocr_processed_at:
-    new Date().toISOString()
-};
-  
+      ocr_processed_at:
+        new Date().toISOString()
+    };
+
     /*
       OCR belum cukup jelas.
     */
@@ -984,100 +984,100 @@ async function handlePhoto(
         jumlahCalon
       );
 
-    
-   /*
-  ==========================================================
-  OCR COCOK DENGAN INPUT PETUGAS
-  TETAPI TETAP MEMINTA KONFIRMASI USER
-  ==========================================================
-*/
 
-if (
-  comparison.matched &&
-  parsed.confidence >= MIN_OCR_CONFIDENCE
-) {
+    /*
+      ==========================================================
+      OCR COCOK DENGAN INPUT PETUGAS
+      TETAPI TETAP MEMINTA KONFIRMASI USER
+      ==========================================================
+    */
 
-  await supabase
-    .from('hasil_suara')
-    .update({
-      ...ocrUpdate,
+    if (
+      comparison.matched &&
+      parsed.confidence >= MIN_OCR_CONFIDENCE
+    ) {
 
-      status_verifikasi:
-        'WAITING_USER_CONFIRMATION',
+      await supabase
+        .from('hasil_suara')
+        .update({
+          ...ocrUpdate,
 
-      user_confirmation:
-        'PENDING_MATCH_CONFIRMATION',
+          status_verifikasi:
+            'WAITING_USER_CONFIRMATION',
 
-      catatan_verifikasi:
-        'OCR cocok dengan input petugas. Menunggu konfirmasi petugas.'
-    })
-    .eq(
-      'id',
-      pending.id
-    );
+          user_confirmation:
+            'PENDING_MATCH_CONFIRMATION',
 
-  const keyboard = {
-    inline_keyboard: [
+          catatan_verifikasi:
+            'OCR cocok dengan input petugas. Menunggu konfirmasi petugas.'
+        })
+        .eq(
+          'id',
+          pending.id
+        );
 
-      [
-        {
-          text:
-            '✅ YA, HASIL FOTO BENAR',
-          callback_data:
-            `OCR_MATCH_CONFIRM_${pending.id}`
-        }
-      ],
+      const keyboard = {
+        inline_keyboard: [
 
-      [
-        {
-          text:
-            '🔄 PERIKSA ULANG FOTO',
-          callback_data:
-            `OCR_MATCH_RECHECK_${pending.id}`
-        }
-      ],
+          [
+            {
+              text:
+                '✅ YA, HASIL FOTO BENAR',
+              callback_data:
+                `OCR_MATCH_CONFIRM_${pending.id}`
+            }
+          ],
 
-      [
-        {
-          text:
-            '👨‍💼 KIRIM KE ADMIN',
-          callback_data:
-            `OCR_MATCH_ADMIN_${pending.id}`
-        }
-      ]
+          [
+            {
+              text:
+                '🔄 PERIKSA ULANG FOTO',
+              callback_data:
+                `OCR_MATCH_RECHECK_${pending.id}`
+            }
+          ],
 
-    ]
-  };
+          [
+            {
+              text:
+                '👨‍💼 KIRIM KE ADMIN',
+              callback_data:
+                `OCR_MATCH_ADMIN_${pending.id}`
+            }
+          ]
 
-  await sendMessage(
-    chatId,
+        ]
+      };
 
-    `✅ <b>HASIL FOTO SESUAI</b>\n\n` +
+      await sendMessage(
+        chatId,
 
-    `Sistem membaca angka pada foto C1 ` +
-    `dan hasilnya <b>sama</b> dengan angka yang Anda kirim.\n\n` +
+        `✅ <b>HASIL FOTO SESUAI</b>\n\n` +
 
-    `📍 TPS: <b>${escapeHtml(
-      pending.tps
-    )}</b>\n\n` +
+        `Sistem membaca angka pada foto C1 ` +
+        `dan hasilnya <b>sama</b> dengan angka yang Anda kirim.\n\n` +
 
-    buildVoteSummary(
-      pending,
-      jumlahCalon
-    ) +
+        `📍 TPS: <b>${escapeHtml(
+          pending.tps
+        )}</b>\n\n` +
 
-    `\n\n` +
+        buildVoteSummary(
+          pending,
+          jumlahCalon
+        ) +
 
-    `🔎 Confidence OCR: ` +
-    `<b>${parsed.confidence.toFixed(1)}%</b>\n\n` +
+        `\n\n` +
 
-    `Apakah Anda memastikan bahwa hasil tersebut benar?`,
+        `🔎 Confidence OCR: ` +
+        `<b>${parsed.confidence.toFixed(1)}%</b>\n\n` +
 
-    keyboard
-  );
+        `Apakah Anda memastikan bahwa hasil tersebut benar?`,
 
-  return;
-}
+        keyboard
+      );
+
+      return;
+    }
 
     /*
       OCR berbeda.
@@ -1149,7 +1149,7 @@ if (
       ) +
 
       `\n\nSilakan tentukan tindakan:`,
-      
+
       keyboard
     );
 
@@ -1163,25 +1163,21 @@ if (
     );
 
     await supabase
-  .from('hasil_suara')
-  .update({
-    status_verifikasi:
-      'WAITING_ADMIN',
+      .from('hasil_suara')
+      .update({
+        status_verifikasi:
+          'WAITING_ADMIN',
 
-    ocr_status:
-      'ERROR',
+        ocr_status:
+          'ERROR',
 
-    ocr_engine:
-      'TESSERACT.JS',
+        ocr_engine:
+          'TESSERACT.JS',
 
-    catatan_verifikasi:
-      error?.message ||
-      'OCR gagal diproses.'
-  })
-  .eq(
-    'id',
-    pending.id
-  );
+        catatan_verifikasi:
+          error?.message ||
+          'OCR gagal diproses.'
+      })
       .eq(
         'id',
         pending.id
@@ -1238,292 +1234,289 @@ async function handleCallbackQuery(
   }
 
   /*
-    USER MEMILIH HASIL C1
+    ==========================================================
+    OCR MATCH — USER CONFIRM
+    ==========================================================
   */
-/*
-  ==========================================================
-  OCR MATCH — USER CONFIRM
-  ==========================================================
-*/
-
-if (
-  data.startsWith('OCR_MATCH_CONFIRM_')
-) {
-
-  const id =
-    data.replace(
-      'OCR_MATCH_CONFIRM_',
-      ''
-    );
-
-  const {
-    data: hasil,
-    error
-  } = await supabase
-    .from('hasil_suara')
-    .select('*')
-    .eq('id', id)
-    .eq('chat_id_saksi', chatId)
-    .maybeSingle();
 
   if (
-    error ||
-    !hasil
+    data.startsWith('OCR_MATCH_CONFIRM_')
   ) {
 
-    await sendMessage(
-      chatId,
-      `❌ Data verifikasi tidak ditemukan.`
-    );
+    const id =
+      data.replace(
+        'OCR_MATCH_CONFIRM_',
+        ''
+      );
+
+    const {
+      data: hasil,
+      error
+    } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('id', id)
+      .eq('chat_id_saksi', chatId)
+      .maybeSingle();
+
+    if (
+      error ||
+      !hasil
+    ) {
+
+      await sendMessage(
+        chatId,
+        `❌ Data verifikasi tidak ditemukan.`
+      );
+
+      return;
+    }
+
+    if (
+      hasil.status_verifikasi !==
+      'WAITING_USER_CONFIRMATION'
+    ) {
+
+      await sendMessage(
+        chatId,
+        `ℹ️ Data ini sudah diproses sebelumnya.`
+      );
+
+      return;
+    }
+
+    const { error: updateError } =
+      await supabase
+        .from('hasil_suara')
+        .update({
+
+          status_verifikasi:
+            'AUTO_VERIFIED',
+
+          user_confirmation:
+            'CONFIRMED_BY_USER',
+
+          user_confirmation_at:
+            new Date().toISOString(),
+
+          verified_by:
+            'BOT_OCR_USER_CONFIRMATION',
+
+          verified_at:
+            new Date().toISOString(),
+
+          catatan_verifikasi:
+            'OCR cocok dan dikonfirmasi oleh petugas.'
+        })
+        .eq(
+          'id',
+          id
+        );
+
+    if (updateError) {
+
+      await sendMessage(
+        chatId,
+        `❌ Gagal mengesahkan data: ${escapeHtml(
+          updateError.message
+        )}`
+      );
+
+      return;
+    }
+
+    if (messageId) {
+
+      await editMessage(
+        chatId,
+        messageId,
+
+        `🎉 <b>VERIFIKASI BERHASIL</b>\n\n` +
+
+        `Hasil foto C1 telah Anda konfirmasi.\n\n` +
+
+        `📍 TPS: <b>${escapeHtml(
+          hasil.tps
+        )}</b>\n\n` +
+
+        `🟢 Status: <b>AUTO VERIFIED</b>\n\n` +
+
+        `Data sekarang telah masuk ke <b>LIVE COUNT</b>.`
+      );
+
+    } else {
+
+      await sendMessage(
+        chatId,
+
+        `🎉 <b>VERIFIKASI BERHASIL</b>\n\n` +
+        `Data telah masuk ke <b>LIVE COUNT</b>.`
+      );
+
+    }
 
     return;
   }
 
+  /*
+    ==========================================================
+    OCR MATCH — USER KIRIM KE ADMIN
+    ==========================================================
+  */
+
   if (
-    hasil.status_verifikasi !==
-    'WAITING_USER_CONFIRMATION'
+    data.startsWith('OCR_MATCH_ADMIN_')
   ) {
 
-    await sendMessage(
-      chatId,
-      `ℹ️ Data ini sudah diproses sebelumnya.`
-    );
+    const id =
+      data.replace(
+        'OCR_MATCH_ADMIN_',
+        ''
+      );
 
-    return;
-  }
+    const {
+      data: hasil
+    } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('id', id)
+      .eq('chat_id_saksi', chatId)
+      .maybeSingle();
 
-  const { error: updateError } =
+    if (!hasil) {
+
+      await sendMessage(
+        chatId,
+        `❌ Data tidak ditemukan.`
+      );
+
+      return;
+    }
+
     await supabase
       .from('hasil_suara')
       .update({
 
         status_verifikasi:
-          'AUTO_VERIFIED',
+          'WAITING_ADMIN',
 
         user_confirmation:
-          'CONFIRMED_BY_USER',
+          'SENT_TO_ADMIN',
 
         user_confirmation_at:
           new Date().toISOString(),
 
-        verified_by:
-          'BOT_OCR_USER_CONFIRMATION',
-
-        verified_at:
-          new Date().toISOString(),
-
         catatan_verifikasi:
-          'OCR cocok dan dikonfirmasi oleh petugas.'
+          'Petugas meminta verifikasi Admin meskipun OCR cocok.'
       })
       .eq(
         'id',
         id
       );
 
-  if (updateError) {
+    if (messageId) {
 
-    await sendMessage(
-      chatId,
-      `❌ Gagal mengesahkan data: ${escapeHtml(
-        updateError.message
-      )}`
-    );
+      await editMessage(
+        chatId,
+        messageId,
+
+        `👨‍💼 <b>DITERUSKAN KE ADMIN</b>\n\n` +
+
+        `Data belum dihitung dalam Live Count.\n` +
+        `Silakan menunggu pemeriksaan Admin.`
+      );
+
+    } else {
+
+      await sendMessage(
+        chatId,
+
+        `👨‍💼 Data diteruskan ke Admin.\n` +
+        `Data belum dihitung dalam Live Count.`
+      );
+
+    }
 
     return;
   }
-
-  if (messageId) {
-
-    await editMessage(
-      chatId,
-      messageId,
-
-      `🎉 <b>VERIFIKASI BERHASIL</b>\n\n` +
-
-      `Hasil foto C1 telah Anda konfirmasi.\n\n` +
-
-      `📍 TPS: <b>${escapeHtml(
-        hasil.tps
-      )}</b>\n\n` +
-
-      `🟢 Status: <b>AUTO VERIFIED</b>\n\n` +
-
-      `Data sekarang telah masuk ke <b>LIVE COUNT</b>.`
-    );
-
-  } else {
-
-    await sendMessage(
-      chatId,
-
-      `🎉 <b>VERIFIKASI BERHASIL</b>\n\n` +
-      `Data telah masuk ke <b>LIVE COUNT</b>.`
-    );
-
-  }
-
-  return;
-}
 
   /*
-  ==========================================================
-  OCR MATCH — USER KIRIM KE ADMIN
-  ==========================================================
-*/
+    ==========================================================
+    OCR MATCH — RECHECK
+    ==========================================================
+  */
 
-if (
-  data.startsWith('OCR_MATCH_ADMIN_')
-) {
+  if (
+    data.startsWith('OCR_MATCH_RECHECK_')
+  ) {
 
-  const id =
-    data.replace(
-      'OCR_MATCH_ADMIN_',
-      ''
-    );
+    const id =
+      data.replace(
+        'OCR_MATCH_RECHECK_',
+        ''
+      );
 
-  const {
-    data: hasil
-  } = await supabase
-    .from('hasil_suara')
-    .select('*')
-    .eq('id', id)
-    .eq('chat_id_saksi', chatId)
-    .maybeSingle();
+    const {
+      data: hasil
+    } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('id', id)
+      .eq('chat_id_saksi', chatId)
+      .maybeSingle();
 
-  if (!hasil) {
+    if (!hasil) {
 
-    await sendMessage(
-      chatId,
-      `❌ Data tidak ditemukan.`
-    );
+      await sendMessage(
+        chatId,
+        `❌ Data tidak ditemukan.`
+      );
 
-    return;
-  }
+      return;
+    }
 
-  await supabase
-    .from('hasil_suara')
-    .update({
+    await supabase
+      .from('hasil_suara')
+      .update({
 
-      status_verifikasi:
-        'WAITING_ADMIN',
+        status_verifikasi:
+          'WAITING_C1',
 
-      user_confirmation:
-        'SENT_TO_ADMIN',
+        user_confirmation:
+          'RECHECK_PHOTO',
 
-      user_confirmation_at:
-        new Date().toISOString(),
+        catatan_verifikasi:
+          'Petugas meminta foto C1 diperiksa ulang.'
+      })
+      .eq(
+        'id',
+        id
+      );
 
-      catatan_verifikasi:
-        'Petugas meminta verifikasi Admin meskipun OCR cocok.'
-    })
-    .eq(
-      'id',
-      id
-    );
+    if (messageId) {
 
-  if (messageId) {
+      await editMessage(
+        chatId,
+        messageId,
 
-    await editMessage(
-      chatId,
-      messageId,
+        `🔄 <b>SIAP DIPERIKSA ULANG</b>\n\n` +
 
-      `👨‍💼 <b>DITERUSKAN KE ADMIN</b>\n\n` +
+        `Silakan kirim ulang foto C1 Plano yang lebih jelas.`
+      );
 
-      `Data belum dihitung dalam Live Count.\n` +
-      `Silakan menunggu pemeriksaan Admin.`
-    );
+    } else {
 
-  } else {
+      await sendMessage(
+        chatId,
 
-    await sendMessage(
-      chatId,
+        `🔄 Silakan kirim ulang foto C1 Plano yang lebih jelas.`
+      );
 
-      `👨‍💼 Data diteruskan ke Admin.\n` +
-      `Data belum dihitung dalam Live Count.`
-    );
-
-  }
-
-  return;
-}
-
-  /*
-  ==========================================================
-  OCR MATCH — RECHECK
-  ==========================================================
-*/
-
-if (
-  data.startsWith('OCR_MATCH_RECHECK_')
-) {
-
-  const id =
-    data.replace(
-      'OCR_MATCH_RECHECK_',
-      ''
-    );
-
-  const {
-    data: hasil
-  } = await supabase
-    .from('hasil_suara')
-    .select('*')
-    .eq('id', id)
-    .eq('chat_id_saksi', chatId)
-    .maybeSingle();
-
-  if (!hasil) {
-
-    await sendMessage(
-      chatId,
-      `❌ Data tidak ditemukan.`
-    );
+    }
 
     return;
   }
 
-  await supabase
-    .from('hasil_suara')
-    .update({
-
-      status_verifikasi:
-        'WAITING_C1',
-
-      user_confirmation:
-        'RECHECK_PHOTO',
-
-      catatan_verifikasi:
-        'Petugas meminta foto C1 diperiksa ulang.'
-    })
-    .eq(
-      'id',
-      id
-    );
-
-  if (messageId) {
-
-    await editMessage(
-      chatId,
-      messageId,
-
-      `🔄 <b>SIAP DIPERIKSA ULANG</b>\n\n` +
-
-      `Silakan kirim ulang foto C1 Plano yang lebih jelas.`
-    );
-
-  } else {
-
-    await sendMessage(
-      chatId,
-
-      `🔄 Silakan kirim ulang foto C1 Plano yang lebih jelas.`
-    );
-
-  }
-
-  return;
-}
-  
   if (
     data.startsWith('OCR_ACCEPT_')
   ) {
