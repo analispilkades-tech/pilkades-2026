@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Ambil data hasil_suara (paling baru di atas)
+    // 1. Ambil data hasil_suara
     const { data: hasilData, error: hasilErr } = await supabase
       .from('hasil_suara')
       .select('*')
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
     if (hasilErr) console.error('Error fetch hasil_suara:', hasilErr);
 
-    // 2. Ambil master_desa secara aman (tidak crash jika terjadi kesalahan)
+    // 2. Ambil master_desa lengkap
     const { data: masterData, error: masterErr } = await supabase
       .from('master_desa')
       .select('*');
@@ -33,25 +33,32 @@ export default async function handler(req, res) {
     const safeHasil = Array.isArray(hasilData) ? hasilData : [];
     const safeMaster = Array.isArray(masterData) ? masterData : [];
 
-    // Peta jumlah_calon berdasarkan Kecamatan, Desa, TPS
+    // Map info DPT dan Jumlah Calon per TPS
     const masterMap = {};
     safeMaster.forEach(m => {
       const kKec = String(m.kecamatan || '').toUpperCase().trim();
       const kDesa = String(m.desa || '').toUpperCase().trim();
       const kTps = String(m.tps || '').toUpperCase().trim();
       const key = `${kKec}_${kDesa}_${kTps}`;
-      masterMap[key] = Number(m.jumlah_calon || 2);
+      
+      masterMap[key] = {
+        jumlah_calon: Number(m.jumlah_calon || 2),
+        dpt: Number(m.dpt || m.jumlah_dpt || m.dpt_total || 0)
+      };
     });
 
-    // Sisipkan jumlah_calon ke data hasil_suara
+    // Enrich data hasil_suara dengan DPT dan Jumlah Calon dari master
     const enrichedData = safeHasil.map(item => {
       const kKec = String(item.kecamatan || '').toUpperCase().trim();
       const kDesa = String(item.desa || '').toUpperCase().trim();
       const kTps = String(item.tps || '').toUpperCase().trim();
       const key = `${kKec}_${kDesa}_${kTps}`;
+      const info = masterMap[key] || { jumlah_calon: 2, dpt: 0 };
+
       return {
         ...item,
-        jumlah_calon: masterMap[key] || 2
+        jumlah_calon: info.jumlah_calon,
+        dpt: Number(item.dpt || info.dpt || 0)
       };
     });
 
