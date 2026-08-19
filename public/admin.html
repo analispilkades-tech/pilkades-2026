@@ -3,2496 +3,1936 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>Panel Admin & Audit Pilkades 2026</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>
+    Panel Admin & Audit Pilkades 2026
+  </title>
 
   <script src="https://cdn.tailwindcss.com"></script>
+
 </head>
 
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
 
-  <!-- =========================================================
-       HEADER
-  ========================================================== -->
-
-  <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-lg">
-
-    <div class="max-w-[1600px] mx-auto flex justify-between items-center">
-
-      <div>
-
-        <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">
-          Polres Wonosobo
-        </span>
-
-        <h1 class="text-xl font-extrabold text-white">
-          PANEL AUDIT & VERIFIKASI C1
-        </h1>
-
-      </div>
-
-      <div class="flex items-center gap-4">
-
-        <span
-          id="adminNameDisplay"
-          class="text-xs text-slate-300 font-mono hidden md:inline">
-          Logged as: Admin
-        </span>
-
-        <button
-          onclick="logoutAdmin()"
-          class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
-
-          Keluar (Logout)
-
-        </button>
-
-      </div>
-
-    </div>
-
-  </header>
+<body
+  class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans"
+>
 
 
-  <!-- =========================================================
-       MAIN
-  ========================================================== -->
+<!-- =====================================================
+     HEADER
+====================================================== -->
 
-  <main class="max-w-[1600px] mx-auto p-4 md:p-6 w-full flex-grow">
+<header
+  class="bg-slate-800 border-b border-slate-700 p-4 shadow-lg"
+>
 
+  <div
+    class="max-w-7xl mx-auto flex justify-between items-center"
+  >
 
-    <!-- =======================================================
-         RINGKASAN STATUS
-    ======================================================== -->
+    <div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <span
+        class="text-xs font-bold text-blue-400 uppercase tracking-widest"
+      >
+        Polres Wonosobo
+      </span>
 
-
-      <!-- PENDING -->
-
-      <button
-        onclick="setFilterStatus('PENDING')"
-        id="tabPending"
-        class="bg-slate-800 hover:bg-slate-700 border border-amber-500/50 p-4 rounded-xl text-left transition shadow-md">
-
-        <div class="text-xs text-amber-400 font-semibold uppercase">
-          ⚠️ Perlu Audit / Review
-        </div>
-
-        <div
-          id="countPending"
-          class="text-2xl font-extrabold text-white mt-1">
-          0 TPS
-        </div>
-
-      </button>
-
-
-      <!-- VERIFIED -->
-
-      <button
-        onclick="setFilterStatus('VERIFIED')"
-        id="tabVerified"
-        class="bg-slate-800 hover:bg-slate-700 border border-emerald-500/50 p-4 rounded-xl text-left transition shadow-md">
-
-        <div class="text-xs text-emerald-400 font-semibold uppercase">
-          ✅ Terverifikasi / Sah
-        </div>
-
-        <div
-          id="countVerified"
-          class="text-2xl font-extrabold text-white mt-1">
-          0 TPS
-        </div>
-
-      </button>
-
-
-      <!-- ALL -->
-
-      <button
-        onclick="setFilterStatus('ALL')"
-        id="tabAll"
-        class="bg-slate-800 hover:bg-slate-700 border border-blue-500/50 p-4 rounded-xl text-left transition shadow-md">
-
-        <div class="text-xs text-blue-400 font-semibold uppercase">
-          📋 Semua Data Livecount
-        </div>
-
-        <div
-          id="countAll"
-          class="text-2xl font-extrabold text-white mt-1">
-          0 TPS
-        </div>
-
-      </button>
-
-
-      <!-- REFRESH -->
-
-      <button
-        onclick="fetchAdminData()"
-        class="bg-slate-800 hover:bg-slate-700 border border-slate-600 p-4 rounded-xl text-left transition shadow-md">
-
-        <div class="text-xs text-slate-400 font-semibold uppercase">
-          🔄 Sinkronisasi
-        </div>
-
-        <div class="text-lg font-bold text-white mt-1">
-          Refresh Data
-        </div>
-
-      </button>
+      <h1
+        class="text-xl font-extrabold text-white"
+      >
+        PANEL AUDIT & VERIFIKASI C1
+      </h1>
 
     </div>
 
 
-    <!-- =======================================================
-         PANEL TABEL
-    ======================================================== -->
+    <div
+      class="flex items-center space-x-4"
+    >
 
-    <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-6">
-
-
-      <!-- HEADER TABEL -->
-
-      <div class="flex flex-col md:flex-row justify-between items-center mb-5 gap-3">
-
-        <div>
-
-          <h2
-            id="tableTitle"
-            class="text-lg font-bold text-white">
-            Daftar Data Masuk
-          </h2>
-
-          <p class="text-xs text-slate-500 mt-1">
-            Admin dapat memeriksa foto, memvalidasi hasil, atau memperbaiki
-            data livecount secara manual.
-          </p>
-
-        </div>
+      <span
+        id="adminNameDisplay"
+        class="text-xs text-slate-300 font-mono hidden md:inline"
+      >
+        Logged as: Admin
+      </span>
 
 
-        <input
-          type="text"
-          id="searchQuery"
-          oninput="applyTableFilter()"
-          placeholder="Cari Desa / Kecamatan / Petugas..."
-          class="p-2 bg-slate-900 border border-slate-700 rounded-lg
-                 text-sm text-white w-full md:w-80
-                 focus:outline-none focus:ring-2 focus:ring-blue-500">
-
-      </div>
-
-
-      <!-- =====================================================
-           TABEL
-      ====================================================== -->
-
-      <div class="overflow-x-auto">
-
-        <table class="w-full text-left text-sm border-collapse">
-
-          <thead>
-
-            <tr class="bg-slate-900/70 text-slate-400 border-b border-slate-700">
-
-              <th class="p-3 min-w-[170px]">
-                Lokasi
-              </th>
-
-              <th class="p-3 min-w-[170px]">
-                Petugas
-              </th>
-
-              <th class="p-3 text-center min-w-[220px]">
-                Perolehan Suara
-              </th>
-
-              <th class="p-3 text-center">
-                Total
-              </th>
-
-              <th class="p-3 text-center min-w-[190px]">
-                Status
-              </th>
-
-              <th class="p-3 text-center">
-                Foto Plano
-              </th>
-
-              <th class="p-3 text-center min-w-[180px]">
-                Aksi Admin
-              </th>
-
-            </tr>
-
-          </thead>
-
-
-          <tbody
-            id="adminTableBody"
-            class="divide-y divide-slate-700/50 text-slate-300">
-
-            <tr>
-
-              <td
-                colspan="7"
-                class="text-center py-8 text-slate-500">
-
-                Memuat data audit...
-
-              </td>
-
-            </tr>
-
-          </tbody>
-
-        </table>
-
-      </div>
+      <button
+        onclick="logoutAdmin()"
+        class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition"
+      >
+        Keluar (Logout)
+      </button>
 
     </div>
 
-  </main>
+  </div>
+
+</header>
 
 
-  <!-- =========================================================
-       FOOTER
-  ========================================================== -->
 
-  <footer
-    class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+<!-- =====================================================
+     MAIN
+====================================================== -->
 
-    <p>
-      &copy; 2026 brengos ntd.
-      Sistem Pengamanan & Audit Pilkades Polres Wonosobo.
+<div
+  class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow"
+>
+
+
+<!-- =====================================================
+     TAB STATUS
+====================================================== -->
+
+<div
+  class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
+>
+
+
+  <button
+    onclick="setFilterStatus('PENDING')"
+    class="bg-slate-800 hover:bg-slate-700 border border-amber-500/50 p-4 rounded-xl text-left transition shadow-md"
+  >
+
+    <div
+      class="text-xs text-amber-400 font-semibold uppercase"
+    >
+      ⚠️ Perlu Audit / Review
+    </div>
+
+    <div
+      id="countPending"
+      class="text-2xl font-extrabold text-white mt-1"
+    >
+      0 TPS
+    </div>
+
+  </button>
+
+
+
+  <button
+    onclick="setFilterStatus('VERIFIED')"
+    class="bg-slate-800 hover:bg-slate-700 border border-emerald-500/50 p-4 rounded-xl text-left transition shadow-md"
+  >
+
+    <div
+      class="text-xs text-emerald-400 font-semibold uppercase"
+    >
+      ✅ Terverifikasi / Sah
+    </div>
+
+    <div
+      id="countVerified"
+      class="text-2xl font-extrabold text-white mt-1"
+    >
+      0 TPS
+    </div>
+
+  </button>
+
+
+
+  <button
+    onclick="setFilterStatus('ALL')"
+    class="bg-slate-800 hover:bg-slate-700 border border-blue-500/50 p-4 rounded-xl text-left transition shadow-md"
+  >
+
+    <div
+      class="text-xs text-blue-400 font-semibold uppercase"
+    >
+      📋 Semua Data Livecount
+    </div>
+
+    <div
+      id="countAll"
+      class="text-2xl font-extrabold text-white mt-1"
+    >
+      0 TPS
+    </div>
+
+  </button>
+
+</div>
+
+
+
+<!-- =====================================================
+     TABEL
+====================================================== -->
+
+<div
+  class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-6"
+>
+
+
+<div
+  class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3"
+>
+
+  <h2
+    id="tableTitle"
+    class="text-lg font-bold text-white"
+  >
+    Daftar Data Masuk
+  </h2>
+
+
+  <input
+    type="text"
+    id="searchQuery"
+    oninput="applyTableFilter()"
+    placeholder="Cari Desa / Kecamatan / Petugas..."
+    class="p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
+  >
+
+</div>
+
+
+
+<div
+  class="overflow-x-auto"
+>
+
+<table
+  class="w-full text-left text-sm border-collapse"
+>
+
+<thead>
+
+<tr
+  class="bg-slate-900/50 text-slate-400 border-b border-slate-700"
+>
+
+  <th class="p-3">
+    Lokasi
+  </th>
+
+  <th class="p-3">
+    Petugas
+  </th>
+
+  <th class="p-3 text-center">
+    Perolehan Suara
+  </th>
+
+  <th class="p-3 text-center">
+    Total
+  </th>
+
+  <th class="p-3 text-center">
+    Status
+  </th>
+
+  <th class="p-3 text-center">
+    Foto Plano
+  </th>
+
+  <th class="p-3 text-center">
+    Aksi Admin
+  </th>
+
+</tr>
+
+</thead>
+
+
+<tbody
+  id="adminTableBody"
+  class="divide-y divide-slate-700/50 text-slate-300"
+>
+
+<tr>
+
+<td
+  colspan="7"
+  class="text-center py-8 text-slate-500"
+>
+  Memuat data audit...
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<!-- =====================================================
+     MODAL UBAH DATA
+====================================================== -->
+
+<div
+  id="editModal"
+  class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4"
+>
+
+
+<div
+  class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
+>
+
+
+<!-- HEADER MODAL -->
+
+<div
+  class="flex justify-between items-center p-5 border-b border-slate-700 shrink-0"
+>
+
+  <div>
+
+    <h2
+      class="text-lg font-bold text-white"
+    >
+      ✏️ Ubah Data Hasil Suara
+    </h2>
+
+    <p
+      id="editLocation"
+      class="text-xs text-slate-400 mt-1"
+    >
+      -
     </p>
 
-  </footer>
-
-
-  <!-- =========================================================
-       MODAL EDIT DATA
-  ========================================================== -->
-
-  <div
-    id="editModal"
-    class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
-
-    <div
-      class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl
-             w-full max-w-lg">
-
-      <!-- HEADER -->
-
-      <div class="p-5 border-b border-slate-700">
-
-        <h3 class="text-lg font-bold text-white">
-          ✏️ Ubah Data Livecount
-        </h3>
-
-        <p
-          id="editLocation"
-          class="text-xs text-slate-400 mt-1">
-          -
-        </p>
-
-      </div>
-
-
-      <!-- FORM -->
-
-      <div class="p-5 space-y-4">
-
-
-        <!-- CALON 01 -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Calon 01
-          </label>
-
-          <input
-            type="number"
-            id="editCalon01"
-            min="0"
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white">
-
-        </div>
-
-
-        <!-- CALON 02 -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Calon 02
-          </label>
-
-          <input
-            type="number"
-            id="editCalon02"
-            min="0"
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white">
-
-        </div>
-
-
-        <!-- CALON 03 -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Calon 03
-          </label>
-
-          <input
-            type="number"
-            id="editCalon03"
-            min="0"
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white">
-
-        </div>
-
-
-        <!-- CALON 04 -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Calon 04
-          </label>
-
-          <input
-            type="number"
-            id="editCalon04"
-            min="0"
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white">
-
-        </div>
-
-
-        <!-- CALON 05 -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Calon 05
-          </label>
-
-          <input
-            type="number"
-            id="editCalon05"
-            min="0"
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white">
-
-        </div>
-
-
-        <!-- TIDAK SAH -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Suara Tidak Sah
-          </label>
-
-          <input
-            type="number"
-            id="editTidakSah"
-            min="0"
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white">
-
-        </div>
-
-
-        <!-- TOTAL -->
-
-        <div class="bg-slate-900 rounded-lg p-3">
-
-          <div class="text-xs text-slate-500">
-            Total suara setelah perubahan
-          </div>
-
-          <div
-            id="editTotal"
-            class="text-2xl font-bold text-emerald-400">
-            0
-          </div>
-
-        </div>
-
-
-        <!-- CATATAN -->
-
-        <div>
-
-          <label class="block text-xs text-slate-400 mb-1">
-            Alasan Perubahan
-          </label>
-
-          <textarea
-            id="editKeterangan"
-            rows="3"
-            placeholder="Contoh: Koreksi berdasarkan pemeriksaan foto plano."
-            class="w-full bg-slate-900 border border-slate-700
-                   rounded-lg px-3 py-2 text-white text-sm"></textarea>
-
-        </div>
-
-      </div>
-
-
-      <!-- FOOTER MODAL -->
-
-      <div
-        class="p-5 border-t border-slate-700 flex justify-end gap-3">
-
-        <button
-          onclick="closeEditModal()"
-          class="px-4 py-2 bg-slate-700 hover:bg-slate-600
-                 rounded-lg text-sm font-bold">
-
-          Batal
-
-        </button>
-
-
-        <button
-          onclick="saveEditedData()"
-          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700
-                 rounded-lg text-sm font-bold">
-
-          💾 Simpan Perubahan
-
-        </button>
-
-      </div>
-
-    </div>
-
   </div>
 
 
-  <!-- =========================================================
-       MODAL DETAIL
-  ========================================================== -->
+  <button
+    onclick="closeEditModal()"
+    class="text-slate-400 hover:text-white text-2xl"
+  >
+    ×
+  </button>
 
-  <div
-    id="detailModal"
-    class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
-
-    <div
-      class="bg-slate-800 border border-slate-700 rounded-2xl
-             shadow-2xl w-full max-w-2xl">
-
-      <div class="p-5 border-b border-slate-700 flex justify-between">
-
-        <div>
-
-          <h3 class="text-lg font-bold text-white">
-            🔎 Detail Data TPS
-          </h3>
-
-          <p
-            id="detailLocation"
-            class="text-xs text-slate-400 mt-1">
-            -
-          </p>
-
-        </div>
-
-        <button
-          onclick="closeDetailModal()"
-          class="text-slate-400 hover:text-white text-xl">
-
-          ✕
-
-        </button>
-
-      </div>
+</div>
 
 
-      <div
-        id="detailContent"
-        class="p-5">
 
-      </div>
+<!-- ISI MODAL SCROLL -->
 
-
-      <div class="p-5 border-t border-slate-700 text-right">
-
-        <button
-          onclick="closeDetailModal()"
-          class="px-4 py-2 bg-slate-700 hover:bg-slate-600
-                 rounded-lg text-sm font-bold">
-
-          Tutup
-
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
+<div
+  class="overflow-y-auto p-5"
+>
 
 
-  <!-- =========================================================
-       JAVASCRIPT
-  ========================================================== -->
-
-  <script>
-
-    let globalData = [];
-
-    let currentFilter = 'PENDING';
-
-    let editingId = null;
+<input
+  type="hidden"
+  id="editId"
+>
 
 
-    /* =========================================================
-       INIT
-    ========================================================= */
+<div
+  class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-5 text-xs text-amber-300"
+>
 
-    document.addEventListener(
-      "DOMContentLoaded",
-      () => {
+  ⚠️ Perubahan angka akan langsung diterapkan
+  ke Livecount dan dicatat dalam audit log.
 
-        const adminNama =
-          localStorage.getItem("adminNama") ||
-          "Admin";
-
-        document.getElementById(
-          "adminNameDisplay"
-        ).innerText =
-          `Logged as: ${adminNama}`;
+</div>
 
 
-        fetchAdminData();
+
+<div
+  class="grid grid-cols-1 gap-4"
+>
 
 
-        /*
-         * Refresh setiap 10 detik.
-         * Tidak mengganggu livecount.
-         */
+<!-- CALON 01 -->
 
-        setInterval(
-          fetchAdminData,
-          10000
-        );
+<div>
 
-      }
+<label
+  class="block text-xs text-slate-400 mb-1"
+>
+  Calon 01
+</label>
+
+<input
+  id="edit01"
+  type="number"
+  min="0"
+  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+
+</div>
+
+
+
+<!-- CALON 02 -->
+
+<div>
+
+<label
+  class="block text-xs text-slate-400 mb-1"
+>
+  Calon 02
+</label>
+
+<input
+  id="edit02"
+  type="number"
+  min="0"
+  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+
+</div>
+
+
+
+<!-- CALON 03 -->
+
+<div>
+
+<label
+  class="block text-xs text-slate-400 mb-1"
+>
+  Calon 03
+</label>
+
+<input
+  id="edit03"
+  type="number"
+  min="0"
+  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+
+</div>
+
+
+
+<!-- CALON 04 -->
+
+<div>
+
+<label
+  class="block text-xs text-slate-400 mb-1"
+>
+  Calon 04
+</label>
+
+<input
+  id="edit04"
+  type="number"
+  min="0"
+  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+
+</div>
+
+
+
+<!-- CALON 05 -->
+
+<div>
+
+<label
+  class="block text-xs text-slate-400 mb-1"
+>
+  Calon 05
+</label>
+
+<input
+  id="edit05"
+  type="number"
+  min="0"
+  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+
+</div>
+
+
+
+<!-- TIDAK SAH -->
+
+<div>
+
+<label
+  class="block text-xs text-slate-400 mb-1"
+>
+  Suara Tidak Sah
+</label>
+
+<input
+  id="editTidakSah"
+  type="number"
+  min="0"
+  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+
+</div>
+
+
+
+<!-- TOTAL -->
+
+<div
+  class="bg-slate-900 rounded-xl p-4 border border-slate-700"
+>
+
+<div
+  class="flex justify-between items-center"
+>
+
+<span
+  class="text-sm text-slate-400"
+>
+  Total Suara
+</span>
+
+<strong
+  id="editTotal"
+  class="text-xl text-white"
+>
+  0
+</strong>
+
+</div>
+
+</div>
+
+
+</div>
+
+</div>
+
+
+
+<!-- FOOTER MODAL -->
+
+<div
+  class="p-5 border-t border-slate-700 flex gap-3 shrink-0"
+>
+
+<button
+  onclick="closeEditModal()"
+  class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm"
+>
+  Batal
+</button>
+
+
+<button
+  onclick="submitEditData()"
+  class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-bold text-sm"
+>
+  💾 Simpan & Sahkan
+</button>
+
+</div>
+
+
+</div>
+
+</div>
+
+
+
+<!-- =====================================================
+     FOOTER
+====================================================== -->
+
+<footer
+  class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500"
+>
+
+<p>
+  &copy; 2026 brengos ntd.
+  Sistem Pengamanan & Audit Pilkades Polres Wonosobo.
+</p>
+
+</footer>
+
+
+
+<script>
+
+let globalData = [];
+
+let currentFilter = 'PENDING';
+
+
+
+/*
+=========================================================
+LOAD
+=========================================================
+*/
+
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+
+    const adminNama =
+      localStorage.getItem("adminNama") ||
+      "Admin";
+
+    document.getElementById(
+      "adminNameDisplay"
+    ).innerText =
+      `Logged as: ${adminNama}`;
+
+
+    fetchAdminData();
+
+
+    setInterval(
+      fetchAdminData,
+      10000
     );
 
+  }
+);
 
-    /* =========================================================
-       AMBIL DATA
-    ========================================================= */
 
-    async function fetchAdminData() {
 
-      try {
+/*
+=========================================================
+FETCH DATA
+=========================================================
+*/
 
-        const res =
-          await fetch('/api/get-data');
+async function fetchAdminData() {
 
+  try {
 
-        if (!res.ok) {
+    const res =
+      await fetch('/api/get-data');
 
-          throw new Error(
-            `HTTP ${res.status}`
-          );
 
-        }
+    const rawText =
+      await res.text();
 
 
-        const result =
-          await res.json();
+    let result;
 
+    try {
 
-        globalData =
-          result.data ||
-          result ||
-          [];
+      result =
+        JSON.parse(rawText);
 
+    } catch (jsonError) {
 
-        if (!Array.isArray(globalData)) {
+      console.error(
+        'GET DATA NON JSON:',
+        rawText
+      );
 
-          globalData = [];
-
-        }
-
-
-        updateTabCounts();
-
-        applyTableFilter();
-
-
-      } catch (err) {
-
-        console.error(
-          "Gagal memuat data admin:",
-          err
-        );
-
-      }
-
-    }
-
-
-    /* =========================================================
-       STATUS
-    ========================================================= */
-
-    function updateTabCounts() {
-
-      const pendingStatuses = [
-
-        'PLANO TIDAK SESUAI',
-
-        'FOTO PLANO BELUM TERVERIFIKASI',
-
-        'MEMERLUKAN VERIFIKASI ADMIN'
-
-      ];
-
-
-      const verifiedStatuses = [
-
-        'AUTO VERIFIED',
-
-        'AUTO_VERIFIED',
-
-        'EDITED_BY_SAKSI',
-
-        'VERIFIED_BY_ADMIN'
-
-      ];
-
-
-      const pendingCount =
-        globalData.filter(
-          d =>
-            pendingStatuses.includes(
-              String(
-                d.status_verifikasi ||
-                ''
-              ).toUpperCase()
-            )
-        ).length;
-
-
-      const verifiedCount =
-        globalData.filter(
-          d =>
-            verifiedStatuses.includes(
-              String(
-                d.status_verifikasi ||
-                ''
-              ).toUpperCase()
-            )
-        ).length;
-
-
-      document.getElementById(
-        "countPending"
-      ).innerText =
-        `${pendingCount} TPS`;
-
-
-      document.getElementById(
-        "countVerified"
-      ).innerText =
-        `${verifiedCount} TPS`;
-
-
-      document.getElementById(
-        "countAll"
-      ).innerText =
-        `${globalData.length} TPS`;
-
-    }
-
-
-    /* =========================================================
-       FILTER
-    ========================================================= */
-
-    function setFilterStatus(status) {
-
-      currentFilter =
-        status;
-
-
-      applyTableFilter();
-
-    }
-
-
-    function applyTableFilter() {
-
-      const search =
-        String(
-          document.getElementById(
-            "searchQuery"
-          ).value ||
-          ''
-        ).toLowerCase();
-
-
-      let filtered =
-        globalData.filter(
-          item => {
-
-            const text =
-              `${item.desa || ''} ` +
-              `${item.kecamatan || ''} ` +
-              `${item.nama_saksi || ''} ` +
-              `${item.nrp_saksi || ''}`;
-
-
-            const matchSearch =
-              text
-                .toLowerCase()
-                .includes(search);
-
-
-            if (!matchSearch) {
-
-              return false;
-
-            }
-
-
-            const status =
-              String(
-                item.status_verifikasi ||
-                ''
-              ).toUpperCase();
-
-
-            if (
-              currentFilter ===
-              'PENDING'
-            ) {
-
-              return [
-
-                'PLANO TIDAK SESUAI',
-
-                'FOTO PLANO BELUM TERVERIFIKASI',
-
-                'MEMERLUKAN VERIFIKASI ADMIN'
-
-              ].includes(status);
-
-            }
-
-
-            if (
-              currentFilter ===
-              'VERIFIED'
-            ) {
-
-              return [
-
-                'AUTO VERIFIED',
-
-                'AUTO_VERIFIED',
-
-                'EDITED_BY_SAKSI',
-
-                'VERIFIED_BY_ADMIN'
-
-              ].includes(status);
-
-            }
-
-
-            return true;
-
-          }
-        );
-
-
-      renderAdminTable(filtered);
-
-    }
-
-
-    /* =========================================================
-       STATUS BADGE
-    ========================================================= */
-
-    function statusBadge(status) {
-
-      const value =
-        String(
-          status ||
-          'PENDING'
-        );
-
-
-      let cls =
-        'bg-slate-700 text-slate-300';
-
-
-      if (
-        value ===
-        'MEMERLUKAN VERIFIKASI ADMIN'
-      ) {
-
-        cls =
-          'bg-amber-500/20 text-amber-400 border border-amber-500/30';
-
-      }
-
-
-      else if (
-        value ===
-        'FOTO PLANO BELUM TERVERIFIKASI'
-      ) {
-
-        cls =
-          'bg-amber-500/20 text-amber-400 border border-amber-500/30';
-
-      }
-
-
-      else if (
-        value ===
-        'PLANO TIDAK SESUAI'
-      ) {
-
-        cls =
-          'bg-rose-500/20 text-rose-400 border border-rose-500/30';
-
-      }
-
-
-      else if (
-        value ===
-        'VERIFIED_BY_ADMIN'
-      ) {
-
-        cls =
-          'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-
-      }
-
-
-      else if (
-        value ===
-        'AUTO VERIFIED' ||
-        value ===
-        'AUTO_VERIFIED' ||
-        value ===
-        'EDITED_BY_SAKSI'
-      ) {
-
-        cls =
-          'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-
-      }
-
-
-      return `
-        <span
-          class="inline-block px-2 py-1 rounded text-[11px]
-                 font-bold ${cls}">
-          ${escapeHtml(value)}
-        </span>
-      `;
-
-    }
-
-
-    /* =========================================================
-       ESCAPE HTML
-    ========================================================= */
-
-    function escapeHtml(value) {
-
-      return String(
-        value ?? ''
-      )
-      .replace(
-        /&/g,
-        '&amp;'
-      )
-      .replace(
-        /</g,
-        '&lt;'
-      )
-      .replace(
-        />/g,
-        '&gt;'
-      )
-      .replace(
-        /"/g,
-        '&quot;'
-      )
-      .replace(
-        /'/g,
-        '&#039;'
+      throw new Error(
+        `Server mengembalikan response tidak valid: ${rawText.substring(0, 200)}`
       );
 
     }
 
 
-    /* =========================================================
-       RENDER TABEL
-    ========================================================= */
+    if (!res.ok) {
 
-    function renderAdminTable(data) {
+      throw new Error(
+        result.error ||
+        `HTTP ${res.status}`
+      );
 
-      const tbody =
-        document.getElementById(
-          "adminTableBody"
-        );
+    }
 
 
-      tbody.innerHTML = "";
+    globalData =
+      result.data ||
+      result ||
+      [];
 
 
-      if (!data.length) {
+    updateTabCounts();
 
-        tbody.innerHTML = `
+    applyTableFilter();
 
-          <tr>
 
-            <td
-              colspan="7"
-              class="text-center py-10 text-slate-500">
+  } catch (err) {
 
-              Tidak ada data dalam kategori ini.
+    console.error(
+      "GAGAL MEMUAT DATA ADMIN:",
+      err
+    );
 
-            </td>
+  }
 
-          </tr>
+}
 
-        `;
 
-        return;
+
+/*
+=========================================================
+API REQUEST HELPER
+=========================================================
+*/
+
+async function callAdminApi(
+  payload
+) {
+
+  const res =
+    await fetch(
+      '/api/admin-verifikasi',
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json'
+        },
+
+        body:
+          JSON.stringify(payload)
 
       }
+    );
 
 
-      data.forEach(
-        item => {
+  /*
+  -------------------------------------------------------
+  Jangan langsung res.json()
+  -------------------------------------------------------
+  */
+
+  const rawText =
+    await res.text();
 
 
-          const status =
-            String(
-              item.status_verifikasi ||
-              'PENDING'
-            );
+  let result = null;
 
 
-          const planoStatus =
-            String(
-              item.ocr_status ||
-              ''
-            ).toUpperCase();
+  try {
+
+    result =
+      rawText
+        ? JSON.parse(rawText)
+        : null;
+
+  } catch (error) {
+
+    console.error(
+      'ADMIN API NON JSON RESPONSE:',
+      rawText
+    );
+
+    throw new Error(
+      `Server API mengembalikan response tidak valid (${res.status}). ` +
+      `Isi: ${rawText.substring(0, 300)}`
+    );
+
+  }
 
 
-          /*
-           * Foto Google Drive
-           */
+  if (!res.ok || !result?.ok) {
 
-          const photoLink =
-            item.google_drive_url
+    throw new Error(
+      result?.error ||
+      `Gagal memproses permintaan. HTTP ${res.status}`
+    );
 
-              ? `
-
-                <a
-                  href="${escapeHtml(
-                    item.google_drive_url
-                  )}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="bg-blue-600 hover:bg-blue-500
-                         text-white px-3 py-1.5
-                         rounded-lg text-xs font-bold
-                         inline-block">
-
-                  📁 Buka Foto
-
-                </a>
-
-              `
-
-              : `
-
-                <span
-                  class="text-slate-500
-                         text-xs italic">
-
-                  Belum Ada Foto
-
-                </span>
-
-              `;
+  }
 
 
-          /*
-           * Tombol Sahkan Plano.
-           *
-           * Jangan tawarkan jika OCR belum
-           * menghasilkan angka.
-           */
+  return result;
 
-          const hasOcrNumbers =
-
-            item.ocr_calon_01 !== null &&
-            item.ocr_calon_01 !== undefined &&
-
-            item.ocr_calon_02 !== null &&
-            item.ocr_calon_02 !== undefined;
+}
 
 
-          const canApprovePlano =
 
-            hasOcrNumbers &&
+/*
+=========================================================
+VERIFY
+=========================================================
+*/
 
-            (
-              planoStatus ===
-              'COMPLETED'
-            );
+async function adminVerify(
+  id,
+  action
+) {
+
+  const item =
+    globalData.find(
+      d =>
+        String(d.id) ===
+        String(id)
+    );
 
 
-          let actionButtons = `
+  if (!item) {
 
-            <div class="flex flex-col gap-2">
+    alert(
+      'Data TPS tidak ditemukan.'
+    );
 
-              <!-- DETAIL -->
+    return;
+
+  }
+
+
+  let pesan = '';
+
+
+  /*
+  -------------------------------------------------------
+  SAHKAN MANUAL
+  -------------------------------------------------------
+  */
+
+  if (
+    action ===
+    'SAHKAN_MANUAL'
+  ) {
+
+    pesan =
+      `Sahkan HASIL INPUT MANUAL?\n\n` +
+
+      `Desa: ${item.desa || '-'}\n` +
+
+      `TPS: ${item.tps || '-'}\n\n` +
+
+      `01: ${item.suara_calon_01 || 0}\n` +
+
+      `02: ${item.suara_calon_02 || 0}\n` +
+
+      `03: ${item.suara_calon_03 || 0}\n` +
+
+      `04: ${item.suara_calon_04 || 0}\n` +
+
+      `05: ${item.suara_calon_05 || 0}\n` +
+
+      `Tidak Sah: ${item.suara_tidak_sah || 0}\n\n` +
+
+      `Total: ${item.total_suara_masuk || 0}\n\n` +
+
+      `Data akan berstatus VERIFIED_BY_ADMIN.`;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  SAHKAN PLANO
+  -------------------------------------------------------
+  */
+
+  else if (
+    action ===
+    'SAHKAN_PLANO'
+  ) {
+
+    pesan =
+      `Sahkan HASIL PLANO/OCR?\n\n` +
+
+      `Desa: ${item.desa || '-'}\n` +
+
+      `TPS: ${item.tps || '-'}\n\n` +
+
+      `Perhatian:\n` +
+
+      `Sistem akan memeriksa confidence OCR.\n` +
+
+      `Jika confidence rendah, angka tidak akan diubah.\n\n` +
+
+      `Lanjutkan?`;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  RESET
+  -------------------------------------------------------
+  */
+
+  else if (
+    action ===
+    'RESET_VERIFIKASI'
+  ) {
+
+    pesan =
+      `Reset status verifikasi?\n\n` +
+
+      `Desa: ${item.desa || '-'}\n` +
+
+      `TPS: ${item.tps || '-'}\n\n` +
+
+      `Data akan dikembalikan ke antrean audit.`;
+
+  }
+
+
+  if (!confirm(pesan)) {
+
+    return;
+
+  }
+
+
+  try {
+
+    const adminNama =
+      localStorage.getItem(
+        'adminNama'
+      ) ||
+      'Admin';
+
+
+    const result =
+      await callAdminApi({
+
+        id:
+          item.id,
+
+        action,
+
+        admin_nama:
+          adminNama
+
+      });
+
+
+    alert(
+      result.message ||
+      'Berhasil.'
+    );
+
+
+    await fetchAdminData();
+
+
+  } catch (err) {
+
+    console.error(
+      'ADMIN VERIFY ERROR:',
+      err
+    );
+
+
+    alert(
+      `Gagal: ${err.message}`
+    );
+
+  }
+
+}
+
+
+
+/*
+=========================================================
+UPDATE TAB
+=========================================================
+*/
+
+function updateTabCounts() {
+
+  const pendingStatuses = [
+
+    'PLANO TIDAK SESUAI',
+
+    'FOTO PLANO BELUM TERVERIFIKASI',
+
+    'MEMERLUKAN VERIFIKASI ADMIN',
+
+    'PENDING'
+
+  ];
+
+
+  const verifiedStatuses = [
+
+    'AUTO VERIFIED',
+
+    'AUTO_VERIFIED',
+
+    'EDITED_BY_SAKSI',
+
+    'VERIFIED_BY_ADMIN'
+
+  ];
+
+
+  const pendingCount =
+    globalData.filter(
+      d =>
+        pendingStatuses.includes(
+          d.status_verifikasi
+        )
+    ).length;
+
+
+  const verifiedCount =
+    globalData.filter(
+      d =>
+        verifiedStatuses.includes(
+          d.status_verifikasi
+        )
+    ).length;
+
+
+  document.getElementById(
+    "countPending"
+  ).innerText =
+    `${pendingCount} TPS`;
+
+
+  document.getElementById(
+    "countVerified"
+  ).innerText =
+    `${verifiedCount} TPS`;
+
+
+  document.getElementById(
+    "countAll"
+  ).innerText =
+    `${globalData.length} TPS`;
+
+}
+
+
+
+/*
+=========================================================
+FILTER
+=========================================================
+*/
+
+function setFilterStatus(
+  status
+) {
+
+  currentFilter =
+    status;
+
+  applyTableFilter();
+
+}
+
+
+
+/*
+=========================================================
+APPLY FILTER
+=========================================================
+*/
+
+function applyTableFilter() {
+
+  const search =
+    document.getElementById(
+      "searchQuery"
+    )
+    .value
+    .toLowerCase();
+
+
+  const pendingStatuses = [
+
+    'PLANO TIDAK SESUAI',
+
+    'FOTO PLANO BELUM TERVERIFIKASI',
+
+    'MEMERLUKAN VERIFIKASI ADMIN',
+
+    'PENDING'
+
+  ];
+
+
+  const verifiedStatuses = [
+
+    'AUTO VERIFIED',
+
+    'AUTO_VERIFIED',
+
+    'EDITED_BY_SAKSI',
+
+    'VERIFIED_BY_ADMIN'
+
+  ];
+
+
+  const filtered =
+    globalData.filter(
+      item => {
+
+        const matchSearch =
+
+          String(
+            item.desa || ''
+          )
+          .toLowerCase()
+          .includes(search)
+
+          ||
+
+          String(
+            item.kecamatan || ''
+          )
+          .toLowerCase()
+          .includes(search)
+
+          ||
+
+          String(
+            item.nama_saksi || ''
+          )
+          .toLowerCase()
+          .includes(search);
+
+
+        if (!matchSearch) {
+
+          return false;
+
+        }
+
+
+        if (
+          currentFilter ===
+          'PENDING'
+        ) {
+
+          return pendingStatuses.includes(
+            item.status_verifikasi
+          );
+
+        }
+
+
+        if (
+          currentFilter ===
+          'VERIFIED'
+        ) {
+
+          return verifiedStatuses.includes(
+            item.status_verifikasi
+          );
+
+        }
+
+
+        return true;
+
+      }
+    );
+
+
+  renderAdminTable(
+    filtered
+  );
+
+}
+
+
+
+/*
+=========================================================
+STATUS BADGE
+=========================================================
+*/
+
+function statusBadge(
+  status
+) {
+
+  const s =
+    status ||
+    'PENDING';
+
+
+  if (
+    [
+      'VERIFIED_BY_ADMIN',
+      'AUTO VERIFIED',
+      'AUTO_VERIFIED',
+      'EDITED_BY_SAKSI'
+    ].includes(s)
+  ) {
+
+    return `
+      <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold">
+        ${escapeHtml(s)}
+      </span>
+    `;
+
+  }
+
+
+  if (
+    [
+      'PLANO TIDAK SESUAI',
+      'FOTO PLANO BELUM TERVERIFIKASI',
+      'MEMERLUKAN VERIFIKASI ADMIN',
+      'PENDING'
+    ].includes(s)
+  ) {
+
+    return `
+      <span class="px-2 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-xs font-bold">
+        ${escapeHtml(s)}
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs font-bold">
+      ${escapeHtml(s)}
+    </span>
+  `;
+
+}
+
+
+
+/*
+=========================================================
+RENDER TABLE
+=========================================================
+*/
+
+function renderAdminTable(
+  data
+) {
+
+  const tbody =
+    document.getElementById(
+      "adminTableBody"
+    );
+
+
+  tbody.innerHTML = "";
+
+
+  if (
+    data.length === 0
+  ) {
+
+    tbody.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="7"
+          class="text-center py-8 text-slate-500"
+        >
+          Tidak ada data dalam kategori ini.
+        </td>
+
+      </tr>
+
+    `;
+
+    return;
+
+  }
+
+
+  data.forEach(
+    item => {
+
+      const photoLink =
+        item.google_drive_url
+
+          ?
+
+        `
+          <a
+            href="${escapeAttribute(item.google_drive_url)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold inline-block shadow"
+          >
+            📁 Buka Foto
+          </a>
+        `
+
+          :
+
+        `
+          <span
+            class="text-slate-500 text-xs italic"
+          >
+            Belum Ada Foto
+          </span>
+        `;
+
+
+      tbody.innerHTML += `
+
+        <tr
+          class="hover:bg-slate-700/30 transition"
+        >
+
+
+          <!-- LOKASI -->
+
+          <td class="p-3">
+
+            <strong
+              class="text-white"
+            >
+              ${escapeHtml(item.desa || '-')}
+            </strong>
+
+            <br>
+
+            <span
+              class="text-xs text-slate-400"
+            >
+              Kec.
+              ${escapeHtml(item.kecamatan || '-')}
+              • TPS
+              ${escapeHtml(item.tps || '-')}
+            </span>
+
+          </td>
+
+
+
+          <!-- PETUGAS -->
+
+          <td
+            class="p-3 text-xs"
+          >
+
+            ${escapeHtml(item.nama_saksi || '-')}
+
+            <br>
+
+            <span
+              class="text-slate-500"
+            >
+              NRP:
+              ${escapeHtml(item.nrp_saksi || '-')}
+            </span>
+
+          </td>
+
+
+
+          <!-- SUARA -->
+
+          <td
+            class="p-3 text-center font-mono text-xs"
+          >
+
+            01:
+            ${item.suara_calon_01 || 0}
+
+            |
+
+            02:
+            ${item.suara_calon_02 || 0}
+
+            <br>
+
+            03:
+            ${item.suara_calon_03 || 0}
+
+            |
+
+            04:
+            ${item.suara_calon_04 || 0}
+
+            |
+
+            05:
+            ${item.suara_calon_05 || 0}
+
+            <br>
+
+            <span
+              class="text-slate-500"
+            >
+              Tidak Sah:
+              ${item.suara_tidak_sah || 0}
+            </span>
+
+          </td>
+
+
+
+          <!-- TOTAL -->
+
+          <td
+            class="p-3 text-center font-bold text-white"
+          >
+
+            ${item.total_suara_masuk || 0}
+
+          </td>
+
+
+
+          <!-- STATUS -->
+
+          <td
+            class="p-3 text-center"
+          >
+
+            ${statusBadge(
+              item.status_verifikasi
+            )}
+
+          </td>
+
+
+
+          <!-- FOTO -->
+
+          <td
+            class="p-3 text-center"
+          >
+
+            ${photoLink}
+
+          </td>
+
+
+
+          <!-- AKSI -->
+
+          <td
+            class="p-3 text-center"
+          >
+
+            <div
+              class="flex flex-col gap-2 min-w-[170px]"
+            >
+
+
+              <!-- SAHKAN MANUAL -->
 
               <button
-                onclick="showDetail('${item.id}')"
-                class="bg-slate-600 hover:bg-slate-500
-                       text-white px-3 py-2
-                       rounded-lg text-xs font-bold">
-
-                🔎 Detail
-
+                onclick="adminVerify('${item.id}', 'SAHKAN_MANUAL')"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+              >
+                ✅ Sahkan Manual
               </button>
+
+
+
+              <!-- SAHKAN PLANO -->
+
+              <button
+                onclick="adminVerify('${item.id}', 'SAHKAN_PLANO')"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+              >
+                📊 Sahkan Plano
+              </button>
+
 
 
               <!-- UBAH DATA -->
 
               <button
                 onclick="openEditModal('${item.id}')"
-                class="bg-orange-600 hover:bg-orange-700
-                       text-white px-3 py-2
-                       rounded-lg text-xs font-bold">
-
+                class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+              >
                 ✏️ Ubah Data
-
               </button>
 
-          `;
 
 
-          /*
-           * SAHKAN MANUAL
-           *
-           * Bisa dilakukan pada data yang
-           * masih membutuhkan verifikasi.
-           */
-
-          if (
-            status ===
-            'MEMERLUKAN VERIFIKASI ADMIN' ||
-
-            status ===
-            'FOTO PLANO BELUM TERVERIFIKASI' ||
-
-            status ===
-            'PLANO TIDAK SESUAI'
-          ) {
-
-            actionButtons += `
+              <!-- RESET -->
 
               <button
-                onclick="adminVerify(
-                  '${item.id}',
-                  'SAHKAN_MANUAL'
-                )"
-                class="bg-emerald-600 hover:bg-emerald-700
-                       text-white px-3 py-2
-                       rounded-lg text-xs font-bold">
-
-                ✅ Sahkan Manual
-
+                onclick="adminVerify('${item.id}', 'RESET_VERIFIKASI')"
+                class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg text-xs font-bold"
+              >
+                ↩️ Reset Audit
               </button>
 
-            `;
-
-          }
-
-
-          /*
-           * SAHKAN PLANO
-           *
-           * Hanya muncul jika OCR
-           * benar-benar selesai.
-           */
-
-          if (canApprovePlano) {
-
-            actionButtons += `
-
-              <button
-                onclick="adminVerify(
-                  '${item.id}',
-                  'SAHKAN_PLANO'
-                )"
-                class="bg-blue-600 hover:bg-blue-700
-                       text-white px-3 py-2
-                       rounded-lg text-xs font-bold">
-
-                📊 Sahkan Plano
-
-              </button>
-
-            `;
-
-          }
-
-
-          /*
-           * TOLAK PLANO
-           *
-           * Ditampilkan jika ada foto
-           * tetapi plano dianggap tidak sesuai.
-           */
-
-          if (
-            item.google_drive_url &&
-            status !==
-            'VERIFIED_BY_ADMIN'
-          ) {
-
-            actionButtons += `
-
-              <button
-                onclick="adminRejectPlano('${item.id}')"
-                class="bg-rose-600 hover:bg-rose-700
-                       text-white px-3 py-2
-                       rounded-lg text-xs font-bold">
-
-                ❌ Tolak Plano
-
-              </button>
-
-            `;
-
-          }
-
-
-          actionButtons += `
-
             </div>
 
-          `;
+          </td>
 
-
-          /*
-           * BARIS
-           */
-
-          tbody.innerHTML += `
-
-            <tr
-              class="hover:bg-slate-700/30
-                     transition align-top">
-
-
-              <!-- LOKASI -->
-
-              <td class="p-3">
-
-                <strong class="text-white">
-
-                  ${escapeHtml(
-                    item.desa || '-'
-                  )}
-
-                </strong>
-
-                <br>
-
-                <span
-                  class="text-xs text-slate-400">
-
-                  Kec.
-                  ${escapeHtml(
-                    item.kecamatan || '-'
-                  )}
-
-                  • TPS
-                  ${escapeHtml(
-                    item.tps || '-'
-                  )}
-
-                </span>
-
-              </td>
-
-
-              <!-- PETUGAS -->
-
-              <td class="p-3 text-xs">
-
-                <strong class="text-slate-200">
-
-                  ${escapeHtml(
-                    item.nama_saksi || '-'
-                  )}
-
-                </strong>
-
-                <br>
-
-                <span class="text-slate-500">
-
-                  NRP:
-                  ${escapeHtml(
-                    item.nrp_saksi || '-'
-                  )}
-
-                </span>
-
-              </td>
-
-
-              <!-- SUARA -->
-
-              <td
-                class="p-3 text-center
-                       font-mono text-xs">
-
-                <div class="space-y-1">
-
-                  <div>
-
-                    01:
-                    <strong>
-                      ${Number(
-                        item.suara_calon_01 || 0
-                      )}
-                    </strong>
-
-                    |
-
-                    02:
-                    <strong>
-                      ${Number(
-                        item.suara_calon_02 || 0
-                      )}
-                    </strong>
-
-                  </div>
-
-
-                  <div>
-
-                    03:
-                    ${Number(
-                      item.suara_calon_03 || 0
-                    )}
-
-                    |
-
-                    04:
-                    ${Number(
-                      item.suara_calon_04 || 0
-                    )}
-
-                    |
-
-                    05:
-                    ${Number(
-                      item.suara_calon_05 || 0
-                    )}
-
-                  </div>
-
-
-                  <div
-                    class="text-slate-500">
-
-                    Tidak Sah:
-                    ${Number(
-                      item.suara_tidak_sah || 0
-                    )}
-
-                  </div>
-
-                </div>
-
-              </td>
-
-
-              <!-- TOTAL -->
-
-              <td
-                class="p-3 text-center">
-
-                <div
-                  class="text-xl font-extrabold
-                         text-white">
-
-                  ${Number(
-                    item.total_suara_masuk || 0
-                  )}
-
-                </div>
-
-                <div
-                  class="text-[10px]
-                         text-slate-500">
-
-                  suara
-
-                </div>
-
-              </td>
-
-
-              <!-- STATUS -->
-
-              <td class="p-3 text-center">
-
-                ${statusBadge(
-                  status
-                )}
-
-                ${
-                  planoStatus
-                    ? `
-
-                      <div
-                        class="mt-2
-                               text-[10px]
-                               text-slate-500">
-
-                        OCR:
-                        ${escapeHtml(
-                          planoStatus
-                        )}
-
-                      </div>
-
-                    `
-                    : ''
-                }
-
-              </td>
-
-
-              <!-- FOTO -->
-
-              <td
-                class="p-3 text-center">
-
-                ${photoLink}
-
-              </td>
-
-
-              <!-- AKSI -->
-
-              <td
-                class="p-3 text-center">
-
-                ${actionButtons}
-
-              </td>
-
-
-            </tr>
-
-          `;
-
-        }
-      );
-
-    }
-
-
-    /* =========================================================
-       DETAIL
-    ========================================================= */
-
-    function showDetail(id) {
-
-      const item =
-        globalData.find(
-          d =>
-            String(d.id) ===
-            String(id)
-        );
-
-
-      if (!item) {
-
-        alert(
-          'Data TPS tidak ditemukan.'
-        );
-
-        return;
-
-      }
-
-
-      document.getElementById(
-        'detailLocation'
-      ).innerText =
-
-        `${item.kecamatan || '-'} / ` +
-        `${item.desa || '-'} / ` +
-        `TPS ${item.tps || '-'}`;
-
-
-      document.getElementById(
-        'detailContent'
-      ).innerHTML = `
-
-        <div class="grid grid-cols-2 gap-3 text-sm">
-
-          <div class="bg-slate-900 p-3 rounded-lg">
-
-            <div class="text-xs text-slate-500">
-              Calon 01
-            </div>
-
-            <div class="text-xl font-bold">
-              ${Number(
-                item.suara_calon_01 || 0
-              )}
-            </div>
-
-          </div>
-
-
-          <div class="bg-slate-900 p-3 rounded-lg">
-
-            <div class="text-xs text-slate-500">
-              Calon 02
-            </div>
-
-            <div class="text-xl font-bold">
-              ${Number(
-                item.suara_calon_02 || 0
-              )}
-            </div>
-
-          </div>
-
-
-          <div class="bg-slate-900 p-3 rounded-lg">
-
-            <div class="text-xs text-slate-500">
-              Calon 03
-            </div>
-
-            <div class="text-xl font-bold">
-              ${Number(
-                item.suara_calon_03 || 0
-              )}
-            </div>
-
-          </div>
-
-
-          <div class="bg-slate-900 p-3 rounded-lg">
-
-            <div class="text-xs text-slate-500">
-              Calon 04
-            </div>
-
-            <div class="text-xl font-bold">
-              ${Number(
-                item.suara_calon_04 || 0
-              )}
-            </div>
-
-          </div>
-
-
-          <div class="bg-slate-900 p-3 rounded-lg">
-
-            <div class="text-xs text-slate-500">
-              Calon 05
-            </div>
-
-            <div class="text-xl font-bold">
-              ${Number(
-                item.suara_calon_05 || 0
-              )}
-            </div>
-
-          </div>
-
-
-          <div class="bg-slate-900 p-3 rounded-lg">
-
-            <div class="text-xs text-slate-500">
-              Tidak Sah
-            </div>
-
-            <div class="text-xl font-bold">
-              ${Number(
-                item.suara_tidak_sah || 0
-              )}
-            </div>
-
-          </div>
-
-
-        </div>
-
-
-        <div
-          class="mt-4 bg-slate-900
-                 rounded-lg p-4">
-
-          <div class="text-xs text-slate-500">
-            Total Suara
-          </div>
-
-          <div
-            class="text-3xl font-extrabold
-                   text-emerald-400">
-
-            ${Number(
-              item.total_suara_masuk || 0
-            )}
-
-          </div>
-
-        </div>
-
-
-        <div
-          class="mt-4 p-4
-                 bg-slate-900
-                 rounded-lg">
-
-          <div class="text-xs text-slate-500">
-            Status Verifikasi
-          </div>
-
-          <div class="mt-2">
-            ${statusBadge(
-              item.status_verifikasi
-            )}
-          </div>
-
-        </div>
-
-
-        ${
-          item.google_drive_url
-            ? `
-
-              <div class="mt-4">
-
-                <a
-                  href="${escapeHtml(
-                    item.google_drive_url
-                  )}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="block text-center
-                         bg-blue-600
-                         hover:bg-blue-700
-                         rounded-lg px-4 py-3
-                         font-bold">
-
-                  📁 Buka Foto Plano
-
-                </a>
-
-              </div>
-
-            `
-            : ''
-        }
+        </tr>
 
       `;
 
-
-      document.getElementById(
-        'detailModal'
-      ).classList.remove(
-        'hidden'
-      );
-
-
-      document.getElementById(
-        'detailModal'
-      ).classList.add(
-        'flex'
-      );
-
     }
+  );
 
+}
 
-    function closeDetailModal() {
 
-      document.getElementById(
-        'detailModal'
-      ).classList.add(
-        'hidden'
-      );
 
-      document.getElementById(
-        'detailModal'
-      ).classList.remove(
-        'flex'
-      );
+/*
+=========================================================
+OPEN EDIT MODAL
+=========================================================
+*/
 
-    }
+function openEditModal(
+  id
+) {
 
-
-    /* =========================================================
-       EDIT DATA
-    ========================================================= */
-
-    function openEditModal(id) {
-
-      const item =
-        globalData.find(
-          d =>
-            String(d.id) ===
-            String(id)
-        );
-
-
-      if (!item) {
-
-        alert(
-          'Data TPS tidak ditemukan.'
-        );
-
-        return;
-
-      }
-
-
-      editingId = item.id;
-
-
-      document.getElementById(
-        'editLocation'
-      ).innerText =
-
-        `${item.kecamatan || '-'} / ` +
-        `${item.desa || '-'} / ` +
-        `TPS ${item.tps || '-'}`;
-
-
-      document.getElementById(
-        'editCalon01'
-      ).value =
-        Number(
-          item.suara_calon_01 || 0
-        );
-
-
-      document.getElementById(
-        'editCalon02'
-      ).value =
-        Number(
-          item.suara_calon_02 || 0
-        );
-
-
-      document.getElementById(
-        'editCalon03'
-      ).value =
-        Number(
-          item.suara_calon_03 || 0
-        );
-
-
-      document.getElementById(
-        'editCalon04'
-      ).value =
-        Number(
-          item.suara_calon_04 || 0
-        );
-
-
-      document.getElementById(
-        'editCalon05'
-      ).value =
-        Number(
-          item.suara_calon_05 || 0
-        );
-
-
-      document.getElementById(
-        'editTidakSah'
-      ).value =
-        Number(
-          item.suara_tidak_sah || 0
-        );
-
-
-      document.getElementById(
-        'editKeterangan'
-      ).value = '';
-
-
-      updateEditTotal();
-
-
-      [
-        'editCalon01',
-        'editCalon02',
-        'editCalon03',
-        'editCalon04',
-        'editCalon05',
-        'editTidakSah'
-      ].forEach(
-        id => {
-
-          document
-            .getElementById(id)
-            .oninput =
-            updateEditTotal;
-
-        }
-      );
-
-
-      document.getElementById(
-        'editModal'
-      ).classList.remove(
-        'hidden'
-      );
-
-
-      document.getElementById(
-        'editModal'
-      ).classList.add(
-        'flex'
-      );
-
-    }
-
-
-    function updateEditTotal() {
-
-      const ids = [
-
-        'editCalon01',
-
-        'editCalon02',
-
-        'editCalon03',
-
-        'editCalon04',
-
-        'editCalon05',
-
-        'editTidakSah'
-
-      ];
-
-
-      const total =
-        ids.reduce(
-          (
-            sum,
-            id
-          ) => {
-
-            return sum +
-              Number(
-                document
-                  .getElementById(id)
-                  .value ||
-                0
-              );
-
-          },
-          0
-        );
-
-
-      document.getElementById(
-        'editTotal'
-      ).innerText =
-        total;
-
-    }
-
-
-    function closeEditModal() {
-
-      editingId = null;
-
-
-      document.getElementById(
-        'editModal'
-      ).classList.add(
-        'hidden'
-      );
-
-
-      document.getElementById(
-        'editModal'
-      ).classList.remove(
-        'flex'
-      );
-
-    }
-
-
-    /* =========================================================
-       SIMPAN PERUBAHAN
-    ========================================================= */
-
-    async function saveEditedData() {
-
-      if (!editingId) {
-
-        alert(
-          'ID data tidak ditemukan.'
-        );
-
-        return;
-
-      }
-
-
-      const data = {
-
-        calon_01:
-          Number(
-            document.getElementById(
-              'editCalon01'
-            ).value ||
-            0
-          ),
-
-        calon_02:
-          Number(
-            document.getElementById(
-              'editCalon02'
-            ).value ||
-            0
-          ),
-
-        calon_03:
-          Number(
-            document.getElementById(
-              'editCalon03'
-            ).value ||
-            0
-          ),
-
-        calon_04:
-          Number(
-            document.getElementById(
-              'editCalon04'
-            ).value ||
-            0
-          ),
-
-        calon_05:
-          Number(
-            document.getElementById(
-              'editCalon05'
-            ).value ||
-            0
-          ),
-
-        tidak_sah:
-          Number(
-            document.getElementById(
-              'editTidakSah'
-            ).value ||
-            0
-          ),
-
-        keterangan:
-          document.getElementById(
-            'editKeterangan'
-          ).value.trim()
-
-      };
-
-
-      if (
-        data.calon_01 < 0 ||
-        data.calon_02 < 0 ||
-        data.calon_03 < 0 ||
-        data.calon_04 < 0 ||
-        data.calon_05 < 0 ||
-        data.tidak_sah < 0
-      ) {
-
-        alert(
-          'Jumlah suara tidak boleh negatif.'
-        );
-
-        return;
-
-      }
-
-
-      if (!data.keterangan) {
-
-        alert(
-          'Alasan perubahan wajib diisi.'
-        );
-
-        return;
-
-      }
-
-
-      const adminNama =
-        localStorage.getItem(
-          'adminNama'
-        ) ||
-        'Admin';
-
-
-      if (
-        !confirm(
-          'Simpan perubahan data livecount ini?'
-        )
-      ) {
-
-        return;
-
-      }
-
-
-      try {
-
-        const res =
-          await fetch(
-            '/api/admin-verifikasi',
-            {
-
-              method: 'POST',
-
-              headers: {
-
-                'Content-Type':
-                  'application/json'
-
-              },
-
-              body:
-                JSON.stringify({
-
-                  id:
-                    editingId,
-
-                  action:
-                    'UBAH_DATA',
-
-                  admin_nama:
-                    adminNama,
-
-                  data
-
-                })
-
-            }
-          );
-
-
-        const result =
-          await res.json();
-
-
-        if (
-          !res.ok ||
-          !result.ok
-        ) {
-
-          throw new Error(
-            result.error ||
-            'Gagal mengubah data'
-          );
-
-        }
-
-
-        alert(
-          result.message ||
-          'Data berhasil diubah.'
-        );
-
-
-        closeEditModal();
-
-
-        await fetchAdminData();
-
-
-      } catch (err) {
-
-        console.error(
-          'UPDATE DATA ERROR:',
-          err
-        );
-
-
-        alert(
-          `Gagal: ${err.message}`
-        );
-
-      }
-
-    }
-
-
-    /* =========================================================
-       VERIFIKASI ADMIN
-    ========================================================= */
-
-    async function adminVerify(
-      id,
-      action
-    ) {
-
-      const item =
-        globalData.find(
-          d =>
-            String(d.id) ===
-            String(id)
-        );
-
-
-      if (!item) {
-
-        alert(
-          'Data TPS tidak ditemukan.'
-        );
-
-        return;
-
-      }
-
-
-      let pesan = '';
-
-
-      if (
-        action ===
-        'SAHKAN_MANUAL'
-      ) {
-
-        pesan =
-
-          `Sahkan HASIL INPUT MANUAL?\n\n` +
-
-          `Kecamatan: ${
-            item.kecamatan || '-'
-          }\n` +
-
-          `Desa: ${
-            item.desa || '-'
-          }\n` +
-
-          `TPS: ${
-            item.tps || '-'
-          }\n\n` +
-
-          `01: ${
-            item.suara_calon_01 || 0
-          }\n` +
-
-          `02: ${
-            item.suara_calon_02 || 0
-          }\n` +
-
-          `03: ${
-            item.suara_calon_03 || 0
-          }\n` +
-
-          `04: ${
-            item.suara_calon_04 || 0
-          }\n` +
-
-          `05: ${
-            item.suara_calon_05 || 0
-          }\n` +
-
-          `Tidak Sah: ${
-            item.suara_tidak_sah || 0
-          }\n\n` +
-
-          `Total: ${
-            item.total_suara_masuk || 0
-          }\n\n` +
-
-          `Admin menyatakan data livecount ini sah.`;
-
-      }
-
-
-      else if (
-        action ===
-        'SAHKAN_PLANO'
-      ) {
-
-        pesan =
-
-          `Sahkan HASIL PLANO/OCR?\n\n` +
-
-          `Desa: ${
-            item.desa || '-'
-          }\n` +
-
-          `TPS: ${
-            item.tps || '-'
-          }\n\n` +
-
-          `01: ${
-            item.ocr_calon_01 || 0
-          }\n` +
-
-          `02: ${
-            item.ocr_calon_02 || 0
-          }\n` +
-
-          `03: ${
-            item.ocr_calon_03 || 0
-          }\n` +
-
-          `04: ${
-            item.ocr_calon_04 || 0
-          }\n` +
-
-          `05: ${
-            item.ocr_calon_05 || 0
-          }\n` +
-
-          `Tidak Sah: ${
-            item.ocr_tidak_sah || 0
-          }\n\n` +
-
-          `Total OCR: ${
-            item.ocr_total_suara || 0
-          }\n\n` +
-
-          `Hasil OCR akan diterapkan ke livecount.`;
-
-      }
-
-
-      if (
-        !confirm(pesan)
-      ) {
-
-        return;
-
-      }
-
-
-      try {
-
-        const adminNama =
-          localStorage.getItem(
-            'adminNama'
-          ) ||
-          'Admin';
-
-
-        const res =
-          await fetch(
-            '/api/admin-verifikasi',
-            {
-
-              method: 'POST',
-
-              headers: {
-
-                'Content-Type':
-                  'application/json'
-
-              },
-
-              body:
-                JSON.stringify({
-
-                  id:
-                    item.id,
-
-                  action,
-
-                  admin_nama:
-                    adminNama
-
-                })
-
-            }
-          );
-
-
-        const result =
-          await res.json();
-
-
-        if (
-          !res.ok ||
-          !result.ok
-        ) {
-
-          throw new Error(
-            result.error ||
-            'Gagal melakukan verifikasi'
-          );
-
-        }
-
-
-        alert(
-          result.message ||
-          'Berhasil'
-        );
-
-
-        await fetchAdminData();
-
-
-      } catch (err) {
-
-        console.error(
-          'ADMIN VERIFY ERROR:',
-          err
-        );
-
-
-        alert(
-          `Gagal: ${err.message}`
-        );
-
-      }
-
-    }
-
-
-    /* =========================================================
-       TOLAK PLANO
-    ========================================================= */
-
-    async function adminRejectPlano(
-      id
-    ) {
-
-      const item =
-        globalData.find(
-          d =>
-            String(d.id) ===
-            String(id)
-        );
-
-
-      if (!item) {
-
-        alert(
-          'Data TPS tidak ditemukan.'
-        );
-
-        return;
-
-      }
-
-
-      const alasan =
-        prompt(
-          'Masukkan alasan plano ditolak:'
-        );
-
-
-      if (
-        alasan === null
-      ) {
-
-        return;
-
-      }
-
-
-      if (
-        !alasan.trim()
-      ) {
-
-        alert(
-          'Alasan wajib diisi.'
-        );
-
-        return;
-
-      }
-
-
-      if (
-        !confirm(
-          'Tolak foto plano ini?'
-        )
-      ) {
-
-        return;
-
-      }
-
-
-      try {
-
-        const adminNama =
-          localStorage.getItem(
-            'adminNama'
-          ) ||
-          'Admin';
-
-
-        const res =
-          await fetch(
-            '/api/admin-verifikasi',
-            {
-
-              method: 'POST',
-
-              headers: {
-
-                'Content-Type':
-                  'application/json'
-
-              },
-
-              body:
-                JSON.stringify({
-
-                  id:
-                    item.id,
-
-                  action:
-                    'TOLAK_PLANO',
-
-                  admin_nama:
-                    adminNama,
-
-                  keterangan:
-                    alasan.trim()
-
-                })
-
-            }
-          );
-
-
-        const result =
-          await res.json();
-
-
-        if (
-          !res.ok ||
-          !result.ok
-        ) {
-
-          throw new Error(
-            result.error ||
-            'Gagal menolak plano'
-          );
-
-        }
-
-
-        alert(
-          result.message ||
-          'Plano ditolak.'
-        );
-
-
-        await fetchAdminData();
-
-
-      } catch (err) {
-
-        console.error(
-          'REJECT PLANO ERROR:',
-          err
-        );
-
-
-        alert(
-          `Gagal: ${err.message}`
-        );
-
-      }
-
-    }
-
-
-    /* =========================================================
-       LOGOUT
-    ========================================================= */
-
-    function logoutAdmin() {
-
-      localStorage.removeItem(
-        "adminToken"
-      );
-
-      localStorage.removeItem(
-        "adminNama"
-      );
-
-
-      window.location.href =
-        "/login";
-
-    }
-
-
-    /* =========================================================
-       ESC
-    ========================================================= */
-
-    document.addEventListener(
-      'keydown',
-      event => {
-
-        if (
-          event.key ===
-          'Escape'
-        ) {
-
-          closeEditModal();
-
-          closeDetailModal();
-
-        }
-
-      }
+  const item =
+    globalData.find(
+      d =>
+        String(d.id) ===
+        String(id)
     );
 
-  </script>
+
+  if (!item) {
+
+    alert(
+      'Data TPS tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  document.getElementById(
+    'editId'
+  ).value =
+    item.id;
+
+
+  document.getElementById(
+    'editLocation'
+  ).innerText =
+    `${item.kecamatan || '-'} / ${item.desa || '-'} / TPS ${item.tps || '-'}`;
+
+
+  document.getElementById(
+    'edit01'
+  ).value =
+    item.suara_calon_01 || 0;
+
+
+  document.getElementById(
+    'edit02'
+  ).value =
+    item.suara_calon_02 || 0;
+
+
+  document.getElementById(
+    'edit03'
+  ).value =
+    item.suara_calon_03 || 0;
+
+
+  document.getElementById(
+    'edit04'
+  ).value =
+    item.suara_calon_04 || 0;
+
+
+  document.getElementById(
+    'edit05'
+  ).value =
+    item.suara_calon_05 || 0;
+
+
+  document.getElementById(
+    'editTidakSah'
+  ).value =
+    item.suara_tidak_sah || 0;
+
+
+  updateEditTotal();
+
+
+  document.getElementById(
+    'editModal'
+  )
+  .classList.remove(
+    'hidden'
+  );
+
+
+  document.getElementById(
+    'editModal'
+  )
+  .classList.add(
+    'flex'
+  );
+
+}
+
+
+
+/*
+=========================================================
+CLOSE MODAL
+=========================================================
+*/
+
+function closeEditModal() {
+
+  const modal =
+    document.getElementById(
+      'editModal'
+    );
+
+
+  modal.classList.add(
+    'hidden'
+  );
+
+
+  modal.classList.remove(
+    'flex'
+  );
+
+}
+
+
+
+/*
+=========================================================
+UPDATE TOTAL PREVIEW
+=========================================================
+*/
+
+function updateEditTotal() {
+
+  const ids = [
+
+    'edit01',
+
+    'edit02',
+
+    'edit03',
+
+    'edit04',
+
+    'edit05',
+
+    'editTidakSah'
+
+  ];
+
+
+  let total = 0;
+
+
+  ids.forEach(
+    id => {
+
+      total +=
+        Number(
+          document.getElementById(
+            id
+          ).value
+        ) || 0;
+
+    }
+  );
+
+
+  document.getElementById(
+    'editTotal'
+  ).innerText =
+    total;
+
+}
+
+
+[
+  'edit01',
+  'edit02',
+  'edit03',
+  'edit04',
+  'edit05',
+  'editTidakSah'
+]
+.forEach(
+  id => {
+
+    document
+      .getElementById(id)
+      .addEventListener(
+        'input',
+        updateEditTotal
+      );
+
+  }
+);
+
+
+
+/*
+=========================================================
+SUBMIT UBAH DATA
+=========================================================
+*/
+
+async function submitEditData() {
+
+  const id =
+    document.getElementById(
+      'editId'
+    ).value;
+
+
+  if (!id) {
+
+    alert(
+      'ID data tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  const newData = {
+
+    suara_calon_01:
+      document.getElementById(
+        'edit01'
+      ).value,
+
+    suara_calon_02:
+      document.getElementById(
+        'edit02'
+      ).value,
+
+    suara_calon_03:
+      document.getElementById(
+        'edit03'
+      ).value,
+
+    suara_calon_04:
+      document.getElementById(
+        'edit04'
+      ).value,
+
+    suara_calon_05:
+      document.getElementById(
+        'edit05'
+      ).value,
+
+    suara_tidak_sah:
+      document.getElementById(
+        'editTidakSah'
+      ).value
+
+  };
+
+
+  const total =
+    Object.values(
+      newData
+    )
+    .reduce(
+      (
+        sum,
+        value
+      ) =>
+        sum +
+        (
+          Number(value) || 0
+        ),
+      0
+    );
+
+
+  const item =
+    globalData.find(
+      d =>
+        String(d.id) ===
+        String(id)
+    );
+
+
+  const pesan =
+    `Simpan perubahan data?\n\n` +
+
+    `Desa: ${item?.desa || '-'}\n` +
+
+    `TPS: ${item?.tps || '-'}\n\n` +
+
+    `01: ${newData.suara_calon_01}\n` +
+
+    `02: ${newData.suara_calon_02}\n` +
+
+    `03: ${newData.suara_calon_03}\n` +
+
+    `04: ${newData.suara_calon_04}\n` +
+
+    `05: ${newData.suara_calon_05}\n` +
+
+    `Tidak Sah: ${newData.suara_tidak_sah}\n\n` +
+
+    `Total: ${total}\n\n` +
+
+    `Data akan disahkan oleh admin.`;
+
+
+  if (!confirm(pesan)) {
+
+    return;
+
+  }
+
+
+  try {
+
+    const adminNama =
+      localStorage.getItem(
+        'adminNama'
+      ) ||
+      'Admin';
+
+
+    const result =
+      await callAdminApi({
+
+        id,
+
+        action:
+          'UBAH_DATA',
+
+        admin_nama:
+          adminNama,
+
+        data:
+          newData
+
+      });
+
+
+    alert(
+      result.message ||
+      'Data berhasil diubah.'
+    );
+
+
+    closeEditModal();
+
+
+    await fetchAdminData();
+
+
+  } catch (err) {
+
+    console.error(
+      'UBAH DATA ERROR:',
+      err
+    );
+
+
+    alert(
+      `Gagal: ${err.message}`
+    );
+
+  }
+
+}
+
+
+
+/*
+=========================================================
+ESCAPE HTML
+=========================================================
+*/
+
+function escapeHtml(
+  value
+) {
+
+  return String(
+    value ?? ''
+  )
+  .replace(
+    /&/g,
+    '&amp;'
+  )
+  .replace(
+    /</g,
+    '&lt;'
+  )
+  .replace(
+    />/g,
+    '&gt;'
+  )
+  .replace(
+    /"/g,
+    '&quot;'
+  )
+  .replace(
+    /'/g,
+    '&#039;'
+  );
+
+}
+
+
+
+function escapeAttribute(
+  value
+) {
+
+  return String(
+    value ?? ''
+  )
+  .replace(
+    /&/g,
+    '&amp;'
+  )
+  .replace(
+    /"/g,
+    '&quot;'
+  )
+  .replace(
+    /</g,
+    '&lt;'
+  )
+  .replace(
+    />/g,
+    '&gt;'
+  );
+
+}
+
+
+
+/*
+=========================================================
+LOGOUT
+=========================================================
+*/
+
+function logoutAdmin() {
+
+  localStorage.removeItem(
+    "adminToken"
+  );
+
+  localStorage.removeItem(
+    "adminNama"
+  );
+
+  window.location.href =
+    "/login";
+
+}
+
+</script>
 
 </body>
-
 </html>
