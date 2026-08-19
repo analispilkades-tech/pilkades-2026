@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { createWorker } from 'tesseract.js';
 import { waitUntil } from '@vercel/functions';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -127,13 +130,16 @@ async function logAktivitas({
 async function runOCR(imageBuffer) {
   let worker = null;
   try {
+    let coreVersion = null;
+    try { coreVersion = require('tesseract.js-core/package.json').version; } catch (e) {}
+    
     worker = await createWorker('eng', 1, {
+      corePath: coreVersion ? `https://cdn.jsdelivr.net/npm/tesseract.js-core@${coreVersion}` : 'https://cdn.jsdelivr.net/npm/tesseract.js-core',
       cachePath: '/tmp'
     });
 
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:-/#.',
-      tessedit_pageseg_mode: '6',
       preserve_interword_spaces: '1'
     });
 
@@ -345,11 +351,13 @@ export default async function handler(req, res) {
     const command = commandOf(text);
 
     // =========================================================================
-    // PRIORITAS UTAMA: JIKA PERINTAH GLOBAL (/start, /help, /batal), BERSIHKAN SESI
+    // PENGAMAN UTAMA MASIF: JIKA PESAN DIAWALI '/', PASTIKAN ITU PERINTAH BUKAN PIN
     // =========================================================================
-    if (command === '/start' || command.startsWith('/start@')) {
+    if (text.startsWith('/')) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
-      
+    }
+
+    if (command === '/start' || command.startsWith('/start@')) {
       const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
       if (petugas) {
         const msg = `👤 <b>ANDA SUDAH TERDAFTAR</b>\n\n` +
@@ -402,43 +410,41 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // =========================================================================
-    // CEK APAKAH ADA PENGGUNA YANG SEDANG DALAM STATUS MENUNGGU PIN (WAIT_CHATID)
-    // =========================================================================
     const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
     if (waitUser) {
-      if (text === String(waitUser.pin ?? '').trim()) {
-        await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
+      if (!text.startsWith('/')) {
+        if (text === String(waitUser.pin ?? '').trim()) {
+          await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
 
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_SUKSES',
-          nrp_saksi: waitUser.nrp,
-          nama_saksi: waitUser.nama_petugas,
-          kecamatan: waitUser.kecamatan,
-          desa: waitUser.desa,
-          keterangan: `Registrasi akun Telegram petugas ${waitUser.nama_petugas} (${waitUser.nrp}) berhasil`
-        });
+          await logAktivitas({
+            jenis_aksi: 'REGISTRASI_SUKSES',
+            nrp_saksi: waitUser.nrp,
+            nama_saksi: waitUser.nama_petugas,
+            kecamatan: waitUser.kecamatan,
+            desa: waitUser.desa,
+            keterangan: `Registrasi akun Telegram petugas ${waitUser.nama_petugas} (${waitUser.nrp}) berhasil`
+          });
 
-        const msg = `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang,\n<b>${escapeHtml(waitUser.nama_petugas)}</b>\n\n` +
-          `📍 Kecamatan : <b>${escapeHtml(waitUser.kecamatan)}</b>\n🏘 Desa : <b>${escapeHtml(waitUser.desa)}</b>\n\n` +
-          `Untuk melaporkan hasil penghitungan suara:\n/kirimhasil`;
-        await removeKeyboard(chatId, msg);
-      } else {
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_PIN_SALAH',
-          nrp_saksi: waitUser.nrp,
-          nama_saksi: waitUser.nama_petugas,
-          kecamatan: waitUser.kecamatan,
-          desa: waitUser.desa,
-          keterangan: `PIN salah dimasukkan oleh NRP ${waitUser.nrp}`
-        });
+          const msg = `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang,\n<b>${escapeHtml(waitUser.nama_petugas)}</b>\n\n` +
+            `📍 Kecamatan : <b>${escapeHtml(waitUser.kecamatan)}</b>\n🏘 Desa : <b>${escapeHtml(waitUser.desa)}</b>\n\n` +
+            `Untuk melaporkan hasil penghitungan suara:\n/kirimhasil`;
+          await removeKeyboard(chatId, msg);
+        } else {
+          await logAktivitas({
+            jenis_aksi: 'REGISTRASI_PIN_SALAH',
+            nrp_saksi: waitUser.nrp,
+            nama_saksi: waitUser.nama_petugas,
+            kecamatan: waitUser.kecamatan,
+            desa: waitUser.desa,
+            keterangan: `PIN salah dimasukkan oleh NRP ${waitUser.nrp}`
+          });
 
-        await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
+          await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
+        }
+        return res.status(200).json({ ok: true });
       }
-      return res.status(200).json({ ok: true });
     }
 
-    // AMBIL DATA PETUGAS YANG SUDAH TERDAFTAR NORMAL
     const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
 
     if (command === '/reg' || command.startsWith('/reg@')) {
