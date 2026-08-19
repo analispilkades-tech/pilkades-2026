@@ -127,11 +127,7 @@ async function logAktivitas({
 async function runOCR(imageBuffer) {
   let worker = null;
   try {
-    let coreVersion = null;
-    try { coreVersion = require('tesseract.js-core/package.json').version; } catch (e) {}
-    
     worker = await createWorker('eng', 1, {
-      corePath: coreVersion ? `https://cdn.jsdelivr.net/npm/tesseract.js-core@${coreVersion}` : 'https://cdn.jsdelivr.net/npm/tesseract.js-core',
       cachePath: '/tmp'
     });
 
