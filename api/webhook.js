@@ -1463,56 +1463,71 @@ async function handleCallback(cb) {
     return;
   }
 
-  if (data.startsWith('USE_MANUAL_')) {
-    const id = data.replace('USE_MANUAL_', '');
-    const { data: hLama } = await supabase.from('hasil_suara').select('*').eq('id', id).single();
+if (data.startsWith('USE_MANUAL_')) {
+  const id = data.replace('USE_MANUAL_', '');
 
-    await supabase.from('hasil_suara').update({ status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' }).eq('id', id);
+  const { data: hLama, error: hError } = await supabase
+    .from('hasil_suara')
+    .select('*')
+    .eq('id', id)
+    .single();
 
-    await logAktivitas({
-      jenis_aksi: 'PILIH_HASIL_MANUAL',
-      nrp_saksi: petugas.nrp,
-      nama_saksi: petugas.nama_petugas,
-      kecamatan: petugas.kecamatan,
-      desa: petugas.desa,
-      tps: hLama?.tps,
-      data_sebelum: { status_verifikasi: hLama?.status_verifikasi },
-      data_sesudah: { status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' },
-      keterangan: `Saksi memilih menggunakan Hasil Input Manual pada TPS ${hLama?.tps}`
-    });
-
-    await editMessage(chatId, cb.message.message_id, `✅ Anda memilih menggunakan <b>Hasil Input Manual</b>. Data dimasukkan ke antrean verifikasi Admin.`);
+  if (hError || !hLama) {
+    await answerCallbackQuery(
+      cb.id,
+      'Data TPS tidak ditemukan.'
+    );
     return;
   }
 
-  if (data.startsWith('USE_PLANO_')) {
-    const id = data.replace('USE_PLANO_', '');
-    const { data: h } = await supabase.from('hasil_suara').select('*').eq('id', id).single();
-    if (h) {
-      const ocrTotal = Number(h.ocr_calon_01 || 0) + Number(h.ocr_calon_02 || 0) + Number(h.ocr_calon_03 || 0) + Number(h.ocr_calon_04 || 0) + Number(h.ocr_calon_05 || 0) + Number(h.ocr_tidak_sah || 0);
+  const { error: updateError } = await supabase
+    .from('hasil_suara')
+    .update({
+      status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN'
+    })
+    .eq('id', id);
 
-      await supabase.from('hasil_suara').update({
-        suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_calon_03: h.ocr_calon_03, suara_calon_04: h.ocr_calon_04, suara_calon_05: h.ocr_calon_05,
-        suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal, status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN'
-      }).eq('id', id);
+  if (updateError) {
+    console.error(
+      '[ADMIN] Gagal mengubah status:',
+      updateError.message
+    );
 
-      await logAktivitas({
-        jenis_aksi: 'PILIH_HASIL_PLANO',
-        nrp_saksi: petugas.nrp,
-        nama_saksi: petugas.nama_petugas,
-        kecamatan: petugas.kecamatan,
-        desa: petugas.desa,
-        tps: h.tps,
-        data_sebelum: {
-          suara_calon_01: h.suara_calon_01, suara_calon_02: h.suara_calon_02, suara_tidak_sah: h.suara_tidak_sah, total_suara_masuk: h.total_suara_masuk
-        },
-        data_sesudah: {
-          suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal
-        },
-        keterangan: `Saksi memilih menggunakan Hasil Pembacaan Plano pada TPS ${h.tps}`
-      });
-    }
-    await editMessage(chatId, cb.message.message_id, `✅ Anda memilih menggunakan <b>Hasil Pembacaan Plano</b>. Data diperbarui dan dimasukkan ke antrean verifikasi Admin.`);
+    await answerCallbackQuery(
+      cb.id,
+      'Gagal mengirim ke verifikasi admin.'
+    );
+
     return;
   }
+
+  await logAktivitas({
+    jenis_aksi: 'PILIH_HASIL_MANUAL',
+    nrp_saksi: petugas.nrp,
+    nama_saksi: petugas.nama_petugas,
+    kecamatan: petugas.kecamatan,
+    desa: petugas.desa,
+    tps: hLama.tps,
+
+    data_sebelum: {
+      status_verifikasi: hLama.status_verifikasi
+    },
+
+    data_sesudah: {
+      status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN',
+      sumber_pilihan: 'INPUT_MANUAL'
+    },
+
+    keterangan:
+      `Saksi memilih menggunakan Hasil Input Manual pada TPS ${hLama.tps}`
+  });
+
+  await editMessage(
+    chatId,
+    cb.message.message_id,
+    `✅ Anda memilih menggunakan <b>Hasil Input Manual</b>.\n\n` +
+    `TPS ${escapeHtml(hLama.tps)} telah dikirim ke antrean verifikasi Admin.`
+  );
+
+  return;
 }
