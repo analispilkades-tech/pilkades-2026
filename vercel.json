@@ -8,3 +8,10 @@
     { "source": "/api/admin-action", "destination": "/api/admin-action.js" }
   ]
 }
+{
+  "functions": {
+    "api/webhook.js": {
+      "maxDuration": 15
+    }
+  }
+}
