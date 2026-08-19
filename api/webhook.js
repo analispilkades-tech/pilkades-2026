@@ -207,18 +207,112 @@ async function runOCR(imageBuffer) {
 }
 
 function parseOCRVotes(ocrText, jumlahCalon) {
-  const normalized = String(ocrText || '').toUpperCase();
-  const result = { calon_01: 0, calon_02: 0, calon_03: 0, calon_04: 0, calon_05: 0, tidak_sah: 0 };
-  
+  const normalized = String(ocrText || '')
+    .toUpperCase()
+    .replace(/\r/g, '\n');
+
+  /*
+   * PENTING:
+   *
+   * null = OCR TIDAK BERHASIL MEMBACA NILAI
+   * 0    = OCR BENAR-BENAR MEMBACA ANGKA 0
+   *
+   * Jangan samakan kedua kondisi tersebut.
+   */
+
+  const result = {
+    calon_01: null,
+    calon_02: null,
+    calon_03: null,
+    calon_04: null,
+    calon_05: null,
+    tidak_sah: null
+  };
+
+  let ditemukan = 0;
+
+  /*
+   * ---------------------------------------------------------
+   * BACA "CALON 01", "CALON 02", dst.
+   * ---------------------------------------------------------
+   */
+
   for (let i = 1; i <= jumlahCalon; i++) {
+
     const num = String(i).padStart(2, '0');
-    const match = normalized.match(new RegExp(`CALON\\s*${num}\\D{0,10}(\\d{1,4})`, 'i'));
-    if (match) result[`calon_${num}`] = parseInt(match[1], 10);
+
+    const patterns = [
+      new RegExp(
+        `CALON\\s*${num}\\D{0,15}(\\d{1,4})`,
+        'i'
+      ),
+
+      new RegExp(
+        `CALON\\s*${i}\\D{0,15}(\\d{1,4})`,
+        'i'
+      )
+    ];
+
+    let match = null;
+
+    for (const pattern of patterns) {
+      match = normalized.match(pattern);
+      if (match) break;
+    }
+
+    if (match) {
+
+      const value = parseInt(match[1], 10);
+
+      if (Number.isInteger(value)) {
+        result[`calon_${num}`] = value;
+        ditemukan++;
+      }
+    }
   }
-  
-  const tsMatch = normalized.match(/(TIDAK\s*SAH|TS)\D{0,10}(\d{1,4})/i);
-  if (tsMatch) result.tidak_sah = parseInt(tsMatch[2], 10);
-  
+
+  /*
+   * ---------------------------------------------------------
+   * BACA TIDAK SAH
+   * ---------------------------------------------------------
+   */
+
+  const tsPatterns = [
+    /(TIDAK\s*SAH)\D{0,15}(\d{1,4})/i,
+    /\bTS\D{0,15}(\d{1,4})/i
+  ];
+
+  for (const pattern of tsPatterns) {
+
+    const match = normalized.match(pattern);
+
+    if (match) {
+
+      const value =
+        parseInt(
+          match[match.length - 1],
+          10
+        );
+
+      if (Number.isInteger(value)) {
+        result.tidak_sah = value;
+        ditemukan++;
+        break;
+      }
+    }
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * HASIL PARSING
+   * ---------------------------------------------------------
+   */
+
+  result._ditemukan = ditemukan;
+
+  result._lengkap =
+    ditemukan >= jumlahCalon + 1;
+
   return result;
 }
 
@@ -526,6 +620,74 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
     console.log(ocrText);
 
     /*
+ * =========================================================
+ * VALIDASI CONFIDENCE OCR
+ *
+ * OCR dengan confidence terlalu rendah tidak boleh
+ * digunakan untuk membandingkan Live Count.
+ *
+ * Live Count TIDAK diubah.
+ * =========================================================
+ */
+
+const OCR_MIN_CONFIDENCE = 40;
+
+if (confidence < OCR_MIN_CONFIDENCE) {
+
+  console.warn(
+    `[OCR] Confidence terlalu rendah: ${confidence}. ` +
+    `Minimum=${OCR_MIN_CONFIDENCE}`
+  );
+
+  await supabase
+    .from('plano_uploads')
+    .update({
+      ocr_status: 'LOW_CONFIDENCE',
+      ocr_engine: 'Tesseract.js 5.0.5',
+      ocr_text: ocrText,
+      ocr_confidence: confidence,
+      ocr_processed_at: new Date().toISOString(),
+      ocr_error:
+        `Confidence OCR terlalu rendah (${confidence}). ` +
+        `Minimum yang diperlukan: ${OCR_MIN_CONFIDENCE}.`
+    })
+    .eq('id', planoUploadId);
+
+  await logAktivitas({
+    jenis_aksi: 'OCR_LOW_CONFIDENCE',
+    nrp_saksi: petugas.nrp,
+    nama_saksi: petugas.nama_petugas,
+    kecamatan: petugas.kecamatan,
+    desa: petugas.desa,
+    tps: tpsTarget,
+
+    data_sesudah: {
+      ocr_confidence: confidence,
+      ocr_status: 'LOW_CONFIDENCE'
+    },
+
+    keterangan:
+      `OCR Foto Plano TPS ${tpsTarget} memiliki ` +
+      `confidence rendah (${confidence}). ` +
+      `Tidak dilakukan verifikasi otomatis.`
+  });
+
+  await sendMessage(
+    chatId,
+    `⚠️ <b>PEMBACAAN FOTO PLANO BELUM CUKUP JELAS</b>\n\n` +
+    `Foto plano berhasil diterima dan disimpan.\n\n` +
+    `Namun sistem belum dapat membaca angka ` +
+    `dengan tingkat keyakinan yang cukup untuk ` +
+    `melakukan verifikasi otomatis.\n\n` +
+    `📊 <b>HASIL LIVE COUNT TETAP TIDAK BERUBAH.</b>\n\n` +
+    `Silakan periksa foto plano atau kirim ulang ` +
+    `foto yang lebih jelas.`
+  );
+
+  return;
+}
+    
+    /*
      * =========================================================
      * 6. JIKA OCR TIDAK MEMBACA APA-APA
      * =========================================================
@@ -574,30 +736,108 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
      * =========================================================
      */
 
-    const ocrRes =
-      parseOCRVotes(
-        ocrText,
-        jumlahCalon
-      );
+const ocrRes =
+  parseOCRVotes(
+    ocrText,
+    jumlahCalon
+  );
 
-    let ocrTotal = 0;
+/*
+ * =========================================================
+ * VALIDASI HASIL PARSING OCR
+ *
+ * Jangan menganggap nilai yang tidak terbaca sebagai 0.
+ * =========================================================
+ */
 
-    for (let i = 1; i <= jumlahCalon; i++) {
+console.log(
+  '[OCR] Hasil parsing:',
+  JSON.stringify(ocrRes)
+);
 
-      const key =
-        `calon_${String(i).padStart(2, '0')}`;
+if (!ocrRes._lengkap) {
 
-      ocrTotal += Number(
-        ocrRes[key] || 0
-      );
-    }
+  console.warn(
+    `[OCR] Data OCR tidak lengkap. ` +
+    `Ditemukan ${ocrRes._ditemukan} ` +
+    `dari ${jumlahCalon + 1} nilai.`
+  );
 
-    ocrTotal += Number(
-      ocrRes.tidak_sah || 0
-    );
+  await supabase
+    .from('plano_uploads')
+    .update({
+      ocr_status: 'LOW_CONFIDENCE',
+      ocr_engine: 'Tesseract.js 5.0.5',
+      ocr_text: ocrText,
+      ocr_calon_01: ocrRes.calon_01,
+      ocr_calon_02: ocrRes.calon_02,
+      ocr_calon_03: ocrRes.calon_03,
+      ocr_calon_04: ocrRes.calon_04,
+      ocr_calon_05: ocrRes.calon_05,
+      ocr_tidak_sah: ocrRes.tidak_sah,
+      ocr_confidence: confidence,
+      ocr_processed_at: new Date().toISOString(),
+      ocr_error:
+        `Hasil OCR tidak lengkap. ` +
+        `Ditemukan ${ocrRes._ditemukan} ` +
+        `dari ${jumlahCalon + 1} nilai.`
+    })
+    .eq('id', planoUploadId);
 
-    ocrRes.total = ocrTotal;
+  await logAktivitas({
+    jenis_aksi: 'OCR_HASIL_TIDAK_LENGKAP',
+    nrp_saksi: petugas.nrp,
+    nama_saksi: petugas.nama_petugas,
+    kecamatan: petugas.kecamatan,
+    desa: petugas.desa,
+    tps: tpsTarget,
 
+    data_sesudah: {
+      ocr: ocrRes,
+      confidence
+    },
+
+    keterangan:
+      `OCR Foto Plano TPS ${tpsTarget} tidak menghasilkan ` +
+      `data lengkap. Tidak dilakukan verifikasi otomatis.`
+  });
+
+  await sendMessage(
+    chatId,
+    `⚠️ <b>HASIL OCR BELUM LENGKAP</b>\n\n` +
+    `Foto plano berhasil diproses, tetapi sistem ` +
+    `belum berhasil membaca seluruh angka suara.\n\n` +
+    `📊 <b>HASIL LIVE COUNT TETAP TIDAK BERUBAH.</b>\n\n` +
+    `Silakan periksa atau kirim ulang foto plano ` +
+    `dengan posisi dan pencahayaan yang lebih jelas.`
+  );
+
+  return;
+}
+
+/*
+ * =========================================================
+ * HITUNG TOTAL OCR
+ * =========================================================
+ */
+
+let ocrTotal = 0;
+
+for (let i = 1; i <= jumlahCalon; i++) {
+
+  const key =
+    `calon_${String(i).padStart(2, '0')}`;
+
+  ocrTotal += Number(
+    ocrRes[key]
+  );
+}
+
+ocrTotal += Number(
+  ocrRes.tidak_sah
+);
+
+ocrRes.total = ocrTotal;
     /*
  * =========================================================
  * 9. SIMPAN HASIL OCR KE plano_uploads
