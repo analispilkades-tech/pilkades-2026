@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
     if (hasilErr) console.error('Error fetch hasil_suara:', hasilErr);
 
-    // 2. Ambil master_desa lengkap
+    // 2. Ambil master_desa
     const { data: masterData, error: masterErr } = await supabase
       .from('master_desa')
       .select('*');
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const safeHasil = Array.isArray(hasilData) ? hasilData : [];
     const safeMaster = Array.isArray(masterData) ? masterData : [];
 
-    // Map info DPT dan Jumlah Calon per TPS
+    // Map DPT (total_dpt) dan Jumlah Calon per TPS
     const masterMap = {};
     safeMaster.forEach(m => {
       const kKec = String(m.kecamatan || '').toUpperCase().trim();
@@ -43,22 +43,22 @@ export default async function handler(req, res) {
       
       masterMap[key] = {
         jumlah_calon: Number(m.jumlah_calon || 2),
-        dpt: Number(m.dpt || m.jumlah_dpt || m.dpt_total || 0)
+        total_dpt: Number(m.total_dpt ?? m.dpt ?? 0)
       };
     });
 
-    // Enrich data hasil_suara dengan DPT dan Jumlah Calon dari master
+    // Enrich data hasil_suara dengan total_dpt dan jumlah_calon
     const enrichedData = safeHasil.map(item => {
       const kKec = String(item.kecamatan || '').toUpperCase().trim();
       const kDesa = String(item.desa || '').toUpperCase().trim();
       const kTps = String(item.tps || '').toUpperCase().trim();
       const key = `${kKec}_${kDesa}_${kTps}`;
-      const info = masterMap[key] || { jumlah_calon: 2, dpt: 0 };
+      const info = masterMap[key] || { jumlah_calon: 2, total_dpt: 0 };
 
       return {
         ...item,
         jumlah_calon: info.jumlah_calon,
-        dpt: Number(item.dpt || info.dpt || 0)
+        total_dpt: Number(item.total_dpt ?? info.total_dpt ?? 0)
       };
     });
 
