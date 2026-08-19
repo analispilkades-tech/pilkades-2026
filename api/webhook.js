@@ -1703,73 +1703,457 @@ async function handleCallback(cb) {
     return;
   }
 
-if (data.startsWith('USE_MANUAL_')) {
-  const id = data.replace('USE_MANUAL_', '');
+  /*
+   * =========================================================
+   * PILIH HASIL MANUAL
+   *
+   * Jika user memilih hasil manual:
+   * - Angka Live Count TIDAK DIUBAH
+   * - Hasil OCR TIDAK digunakan
+   * - Status dikirim ke verifikasi Admin
+   * =========================================================
+   */
 
-  const { data: hLama, error: hError } = await supabase
-    .from('hasil_suara')
-    .select('*')
-    .eq('id', id)
-    .single();
+  if (data.startsWith('USE_MANUAL_')) {
 
-  if (hError || !hLama) {
-    await answerCallbackQuery(
-      cb.id,
-      'Data TPS tidak ditemukan.'
+    const id =
+      data.replace('USE_MANUAL_', '');
+
+    const { data: hLama, error: hError } =
+      await supabase
+        .from('hasil_suara')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (hError || !hLama) {
+
+      await answerCallbackQuery(
+        cb.id,
+        'Data TPS tidak ditemukan.'
+      );
+
+      return;
+    }
+
+    const { error: updateError } =
+      await supabase
+        .from('hasil_suara')
+        .update({
+          status_verifikasi:
+            'MEMERLUKAN VERIFIKASI ADMIN'
+        })
+        .eq('id', id);
+
+    if (updateError) {
+
+      console.error(
+        '[ADMIN] Gagal mengubah status:',
+        updateError.message
+      );
+
+      await answerCallbackQuery(
+        cb.id,
+        'Gagal mengirim ke verifikasi admin.'
+      );
+
+      return;
+    }
+
+    await logAktivitas({
+
+      jenis_aksi:
+        'PILIH_HASIL_MANUAL',
+
+      nrp_saksi:
+        petugas.nrp,
+
+      nama_saksi:
+        petugas.nama_petugas,
+
+      kecamatan:
+        petugas.kecamatan,
+
+      desa:
+        petugas.desa,
+
+      tps:
+        hLama.tps,
+
+      data_sebelum: {
+
+        status_verifikasi:
+          hLama.status_verifikasi,
+
+        suara_calon_01:
+          hLama.suara_calon_01,
+
+        suara_calon_02:
+          hLama.suara_calon_02,
+
+        suara_calon_03:
+          hLama.suara_calon_03,
+
+        suara_calon_04:
+          hLama.suara_calon_04,
+
+        suara_calon_05:
+          hLama.suara_calon_05,
+
+        suara_tidak_sah:
+          hLama.suara_tidak_sah,
+
+        total_suara_masuk:
+          hLama.total_suara_masuk
+      },
+
+      data_sesudah: {
+
+        status_verifikasi:
+          'MEMERLUKAN VERIFIKASI ADMIN',
+
+        sumber_pilihan:
+          'INPUT_MANUAL'
+      },
+
+      keterangan:
+        `Saksi memilih menggunakan Hasil Input Manual ` +
+        `pada TPS ${hLama.tps}. ` +
+        `Angka Live Count tetap menggunakan hasil manual.`
+    });
+
+    await editMessage(
+
+      chatId,
+
+      cb.message.message_id,
+
+      `✅ <b>HASIL INPUT MANUAL DIPILIH</b>\n\n` +
+
+      `📍 TPS : <b>${escapeHtml(hLama.tps)}</b>\n\n` +
+
+      `📊 Hasil Live Count tetap menggunakan ` +
+      `<b>hasil input manual</b>.\n\n` +
+
+      `⚠️ Status: <b>MEMERLUKAN VERIFIKASI ADMIN</b>`
     );
+
     return;
   }
 
-  const { error: updateError } = await supabase
-    .from('hasil_suara')
-    .update({
-      status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN'
-    })
-    .eq('id', id);
 
-  if (updateError) {
-    console.error(
-      '[ADMIN] Gagal mengubah status:',
-      updateError.message
-    );
+  /*
+   * =========================================================
+   * PILIH HASIL PLANO
+   *
+   * Jika user memilih hasil OCR Plano:
+   * - Angka hasil_suara diganti dengan angka OCR
+   * - Total suara diganti dengan total OCR
+   * - Status verifikasi dicatat
+   * - Dicatat ke log aktivitas
+   * =========================================================
+   */
 
-    await answerCallbackQuery(
-      cb.id,
-      'Gagal mengirim ke verifikasi admin.'
+  if (data.startsWith('USE_PLANO_')) {
+
+    const id =
+      data.replace('USE_PLANO_', '');
+
+    /*
+     * Ambil hasil suara lama
+     */
+    const { data: hLama, error: hError } =
+      await supabase
+        .from('hasil_suara')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (hError || !hLama) {
+
+      await answerCallbackQuery(
+        cb.id,
+        'Data TPS tidak ditemukan.'
+      );
+
+      return;
+    }
+
+    /*
+     * Ambil hasil OCR terbaru untuk hasil_suara ini
+     */
+    const { data: plano, error: planoError } =
+      await supabase
+        .from('plano_uploads')
+        .select('*')
+        .eq('hasil_suara_id', id)
+        .eq('ocr_status', 'COMPLETED')
+        .order('created_at', {
+          ascending: false
+        })
+        .limit(1)
+        .maybeSingle();
+
+    if (planoError || !plano) {
+
+      console.error(
+        '[PLANO] Hasil OCR tidak ditemukan:',
+        planoError?.message
+      );
+
+      await answerCallbackQuery(
+        cb.id,
+        'Hasil pembacaan plano tidak ditemukan.'
+      );
+
+      return;
+    }
+
+    /*
+     * Pastikan OCR memang memiliki hasil angka
+     */
+    if (
+      plano.ocr_calon_01 === null ||
+      plano.ocr_calon_01 === undefined ||
+      plano.ocr_calon_02 === null ||
+      plano.ocr_calon_02 === undefined ||
+      plano.ocr_tidak_sah === null ||
+      plano.ocr_tidak_sah === undefined
+    ) {
+
+      await answerCallbackQuery(
+        cb.id,
+        'Hasil OCR belum lengkap.'
+      );
+
+      return;
+    }
+
+    /*
+     * Ambil jumlah calon
+     */
+    const { data: mDesa } =
+      await supabase
+        .from('master_desa')
+        .select('jumlah_calon')
+        .eq('kecamatan', hLama.kecamatan)
+        .eq('desa', hLama.desa)
+        .eq('tps', hLama.tps)
+        .maybeSingle();
+
+    const jumlahCalon =
+      mDesa?.jumlah_calon || 2;
+
+    /*
+     * Siapkan payload hasil plano
+     */
+    const planoPayload = {
+
+      suara_calon_01:
+        Number(plano.ocr_calon_01 || 0),
+
+      suara_calon_02:
+        Number(plano.ocr_calon_02 || 0),
+
+      suara_calon_03:
+        jumlahCalon >= 3
+          ? Number(plano.ocr_calon_03 || 0)
+          : hLama.suara_calon_03,
+
+      suara_calon_04:
+        jumlahCalon >= 4
+          ? Number(plano.ocr_calon_04 || 0)
+          : hLama.suara_calon_04,
+
+      suara_calon_05:
+        jumlahCalon >= 5
+          ? Number(plano.ocr_calon_05 || 0)
+          : hLama.suara_calon_05,
+
+      suara_tidak_sah:
+        Number(plano.ocr_tidak_sah || 0),
+
+      total_suara_masuk:
+        Number(plano.ocr_total_suara || 0),
+
+      status_verifikasi:
+        'MEMILIH HASIL PLANO'
+    };
+
+    /*
+     * Update Live Count dengan hasil plano
+     */
+    const { error: updateError } =
+      await supabase
+        .from('hasil_suara')
+        .update(planoPayload)
+        .eq('id', id);
+
+    if (updateError) {
+
+      console.error(
+        '[PLANO] Gagal menggunakan hasil plano:',
+        updateError.message
+      );
+
+      await answerCallbackQuery(
+        cb.id,
+        'Gagal menerapkan hasil plano.'
+      );
+
+      return;
+    }
+
+    /*
+     * Catat aktivitas
+     */
+    await logAktivitas({
+
+      jenis_aksi:
+        'PILIH_HASIL_PLANO',
+
+      nrp_saksi:
+        petugas.nrp,
+
+      nama_saksi:
+        petugas.nama_petugas,
+
+      kecamatan:
+        petugas.kecamatan,
+
+      desa:
+        petugas.desa,
+
+      tps:
+        hLama.tps,
+
+      data_sebelum: {
+
+        suara_calon_01:
+          hLama.suara_calon_01,
+
+        suara_calon_02:
+          hLama.suara_calon_02,
+
+        suara_calon_03:
+          hLama.suara_calon_03,
+
+        suara_calon_04:
+          hLama.suara_calon_04,
+
+        suara_calon_05:
+          hLama.suara_calon_05,
+
+        suara_tidak_sah:
+          hLama.suara_tidak_sah,
+
+        total_suara_masuk:
+          hLama.total_suara_masuk,
+
+        status_verifikasi:
+          hLama.status_verifikasi
+      },
+
+      data_sesudah: {
+
+        suara_calon_01:
+          planoPayload.suara_calon_01,
+
+        suara_calon_02:
+          planoPayload.suara_calon_02,
+
+        suara_calon_03:
+          planoPayload.suara_calon_03,
+
+        suara_calon_04:
+          planoPayload.suara_calon_04,
+
+        suara_calon_05:
+          planoPayload.suara_calon_05,
+
+        suara_tidak_sah:
+          planoPayload.suara_tidak_sah,
+
+        total_suara_masuk:
+          planoPayload.total_suara_masuk,
+
+        status_verifikasi:
+          'MEMILIH HASIL PLANO',
+
+        sumber_pilihan:
+          'FOTO_PLANO_OCR',
+
+        plano_upload_id:
+          plano.id
+      },
+
+      keterangan:
+        `Saksi memilih menggunakan hasil pembacaan ` +
+        `Foto Plano TPS ${hLama.tps}. ` +
+        `Live Count diperbarui menggunakan hasil OCR.`
+    });
+
+    /*
+     * Tandai plano sebagai hasil yang dipilih
+     *
+     * OCR tetap tersimpan sebagai histori.
+     */
+    await supabase
+      .from('plano_uploads')
+      .update({
+        ocr_status: 'SELECTED'
+      })
+      .eq('id', plano.id);
+
+    /*
+     * Tampilkan hasil yang sekarang digunakan
+     */
+    const hasilPlano = {
+
+      calon_01:
+        planoPayload.suara_calon_01,
+
+      calon_02:
+        planoPayload.suara_calon_02,
+
+      calon_03:
+        planoPayload.suara_calon_03,
+
+      calon_04:
+        planoPayload.suara_calon_04,
+
+      calon_05:
+        planoPayload.suara_calon_05,
+
+      tidak_sah:
+        planoPayload.suara_tidak_sah,
+
+      total:
+        planoPayload.total_suara_masuk
+    };
+
+    await editMessage(
+
+      chatId,
+
+      cb.message.message_id,
+
+      `✅ <b>HASIL PLANO DIPILIH</b>\n\n` +
+
+      `📍 TPS : <b>${escapeHtml(hLama.tps)}</b>\n\n` +
+
+      `📊 <b>HASIL YANG DIGUNAKAN</b>\n` +
+
+      `${buildSummaryText(
+        hLama.tps,
+        hasilPlano,
+        jumlahCalon
+      )}\n\n` +
+
+      `📌 Sumber: <b>FOTO PLANO</b>`
     );
 
     return;
   }
-
-  await logAktivitas({
-    jenis_aksi: 'PILIH_HASIL_MANUAL',
-    nrp_saksi: petugas.nrp,
-    nama_saksi: petugas.nama_petugas,
-    kecamatan: petugas.kecamatan,
-    desa: petugas.desa,
-    tps: hLama.tps,
-
-    data_sebelum: {
-      status_verifikasi: hLama.status_verifikasi
-    },
-
-    data_sesudah: {
-      status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN',
-      sumber_pilihan: 'INPUT_MANUAL'
-    },
-
-    keterangan:
-      `Saksi memilih menggunakan Hasil Input Manual pada TPS ${hLama.tps}`
-  });
-
-  await editMessage(
-    chatId,
-    cb.message.message_id,
-    `✅ Anda memilih menggunakan <b>Hasil Input Manual</b>.\n\n` +
-    `TPS ${escapeHtml(hLama.tps)} telah dikirim ke antrean verifikasi Admin.`
-  );
-
-  return;
-}
 
 }
