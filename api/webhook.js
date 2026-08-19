@@ -253,86 +253,418 @@ function buildSummaryText(tps, voteObj, jumlahCalon) {
 ========================================================= */
 
 async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas) {
+  let planoUploadId = null;
+  let hasilSuaraId = null;
+
   try {
-    const { data: dbHasilAwal } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
-    
-    if (!dbHasilAwal) {
-      await supabase.from('hasil_suara').insert({
-        kecamatan: petugas.kecamatan, 
-        desa: petugas.desa, 
-        tps: tpsTarget, 
-        nrp_saksi: petugas.nrp, 
-        nama_saksi: petugas.nama_petugas,
-        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', 
-        telegram_photo_file_id: fileId
-      });
-    } else {
-      await supabase.from('hasil_suara').update({
-        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI',
-        telegram_photo_file_id: fileId
-      }).eq('id', dbHasilAwal.id);
+    console.log(
+      `[PLANO] Mulai proses TPS ${tpsTarget} - ${petugas.kecamatan}/${petugas.desa}`
+    );
+
+    /*
+     * =========================================================
+     * 1. CARI / BUAT HASIL SUARA
+     *    Bagian ini hanya untuk menjaga Live Count.
+     *    TIDAK BERGANTUNG PADA OCR.
+     * =========================================================
+     */
+
+    const { data: dbHasilAwal, error: hasilError } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('kecamatan', petugas.kecamatan)
+      .eq('desa', petugas.desa)
+      .eq('tps', tpsTarget)
+      .maybeSingle();
+
+    if (hasilError) {
+      throw new Error(
+        `Gagal membaca hasil_suara: ${hasilError.message}`
+      );
     }
 
+    if (!dbHasilAwal) {
+      const { data: hasilBaru, error: insertHasilError } = await supabase
+        .from('hasil_suara')
+        .insert({
+          kecamatan: petugas.kecamatan,
+          desa: petugas.desa,
+          tps: tpsTarget,
+          nrp_saksi: petugas.nrp,
+          nama_saksi: petugas.nama_petugas,
+          status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI',
+          telegram_photo_file_id: fileId
+        })
+        .select('id')
+        .single();
+
+      if (insertHasilError) {
+        throw new Error(
+          `Gagal membuat hasil_suara: ${insertHasilError.message}`
+        );
+      }
+
+      hasilSuaraId = hasilBaru.id;
+
+    } else {
+
+      hasilSuaraId = dbHasilAwal.id;
+
+      const { error: updateHasilError } = await supabase
+        .from('hasil_suara')
+        .update({
+          status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI',
+          telegram_photo_file_id: fileId
+        })
+        .eq('id', dbHasilAwal.id);
+
+      if (updateHasilError) {
+        console.error(
+          '[PLANO] Gagal update status hasil_suara:',
+          updateHasilError.message
+        );
+      }
+    }
+
+    /*
+     * =========================================================
+     * 2. BUAT RECORD plano_uploads
+     *
+     *    INI WAJIB DILAKUKAN SEBELUM OCR.
+     * =========================================================
+     */
+
+    const { data: planoUpload, error: planoInsertError } = await supabase
+      .from('plano_uploads')
+      .insert({
+        hasil_suara_id: hasilSuaraId,
+        kecamatan: petugas.kecamatan,
+        desa: petugas.desa,
+        tps: tpsTarget,
+        nrp_saksi: petugas.nrp,
+        nama_saksi: petugas.nama_petugas,
+        chat_id_saksi: chatId,
+        telegram_photo_file_id: fileId,
+        ocr_status: 'PENDING',
+        ocr_engine: 'Tesseract.js 5.0.5'
+      })
+      .select('id')
+      .single();
+
+    if (planoInsertError) {
+      throw new Error(
+        `Gagal insert plano_uploads: ${planoInsertError.message}`
+      );
+    }
+
+    planoUploadId = planoUpload.id;
+
+    console.log(
+      `[PLANO] plano_uploads berhasil dibuat. ID=${planoUploadId}`
+    );
+
+    /*
+     * =========================================================
+     * 3. DOWNLOAD FOTO DARI TELEGRAM
+     * =========================================================
+     */
+
     const imageBuffer = await downloadTelegramFile(fileId);
-    
-    const cleanKec = String(petugas.kecamatan || 'kec').toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const cleanDesa = String(petugas.desa || 'desa').toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const cleanTps = String(tpsTarget || '1').toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const customFileName = `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;
+
+    console.log(
+      `[PLANO] Foto berhasil didownload. Size=${imageBuffer.length} bytes`
+    );
+
+    /*
+     * =========================================================
+     * 4. UPLOAD KE GOOGLE DRIVE
+     * =========================================================
+     */
+
+    const cleanKec = String(
+      petugas.kecamatan || 'kec'
+    )
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_');
+
+    const cleanDesa = String(
+      petugas.desa || 'desa'
+    )
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_');
+
+    const cleanTps = String(
+      tpsTarget || '1'
+    )
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_');
+
+    const customFileName =
+      `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;
 
     let googleDriveUrl = null;
+
     if (GDRIVE_WEBHOOK_URL) {
       try {
+
         const driveRes = await fetch(GDRIVE_WEBHOOK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             base64Data: imageBuffer.toString('base64'),
             mimeType: 'image/jpeg',
             fileName: customFileName
           })
         });
+
         const driveJson = await driveRes.json();
+
         if (driveJson.success) {
           googleDriveUrl = driveJson.url;
+
+          console.log(
+            `[PLANO] Google Drive berhasil: ${googleDriveUrl}`
+          );
+
+          await supabase
+            .from('plano_uploads')
+            .update({
+              google_drive_url: googleDriveUrl
+            })
+            .eq('id', planoUploadId);
+
+          await supabase
+            .from('hasil_suara')
+            .update({
+              google_drive_url: googleDriveUrl
+            })
+            .eq('id', hasilSuaraId);
+
+        } else {
+          console.error(
+            '[PLANO] Google Drive gagal:',
+            driveJson
+          );
         }
-      } catch (e) {
-        console.error("Gagal kirim ke Google Drive:", e);
+
+      } catch (driveError) {
+
+        console.error(
+          '[PLANO] Gagal kirim ke Google Drive:',
+          driveError?.message || driveError
+        );
       }
     }
 
-    if (googleDriveUrl) {
-      await supabase.from('hasil_suara').update({
-        google_drive_url: googleDriveUrl
-      }).eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget);
-    }
+    /*
+     * =========================================================
+     * 5. MULAI OCR
+     * =========================================================
+     */
 
-let ocrText = '';
+    await supabase
+      .from('plano_uploads')
+      .update({
+        ocr_status: 'PROCESSING',
+        ocr_started_at: new Date().toISOString()
+      })
+      .eq('id', planoUploadId);
+
+    console.log(
+      `[OCR] Mulai OCR untuk plano_uploads ID=${planoUploadId}`
+    );
+
+    let ocr;
+
     try {
-      const ocr = await runOCR(imageBuffer);
-      ocrText = ocr?.text || '';
-      
-      // TAMBAHKAN INI UNTUK MELIHAT HASIL BACAAN OCR DI LOG VERCEL
-      console.log("=== HASIL MENTAH OCR TESSERACT ===");
-      console.log(ocrText);
-      console.log("TINGKAT KEYAKINAN:", ocr.confidence);
-      
+
+      ocr = await runOCR(imageBuffer);
+
     } catch (ocrErr) {
-      console.error("Proses OCR gagal/timeout:", ocrErr);
-      return; 
+
+      const errorMessage =
+        ocrErr?.stack ||
+        ocrErr?.message ||
+        String(ocrErr);
+
+      console.error(
+        `[OCR] Gagal untuk plano_uploads ID=${planoUploadId}:`,
+        errorMessage
+      );
+
+      await supabase
+        .from('plano_uploads')
+        .update({
+          ocr_status: 'FAILED',
+          ocr_engine: 'Tesseract.js 5.0.5',
+          ocr_error: errorMessage,
+          ocr_processed_at: new Date().toISOString()
+        })
+        .eq('id', planoUploadId);
+
+      /*
+       * SANGAT PENTING:
+       * OCR gagal TIDAK boleh mengubah Live Count.
+       */
+
+      return;
     }
 
-    if (!ocrText) return;
+    const ocrText = ocr?.text || '';
+    const confidence = Number(ocr?.confidence || 0);
 
-    const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
-    const jumlahCalon = mDesa?.jumlah_calon || 2;
-    const ocrRes = parseOCRVotes(ocrText, jumlahCalon);
-    
-    const { data: dbHasilTerbaru } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
-    if (!dbHasilTerbaru || dbHasilTerbaru.suara_calon_01 === null || dbHasilTerbaru.suara_calon_01 === undefined) {
-      await supabase.from('hasil_suara').update({
-        ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
-      }).eq('id', dbHasilTerbaru.id);
+    console.log(
+      `[OCR] Berhasil. Confidence=${confidence}`
+    );
+
+    console.log(
+      '=== HASIL MENTAH OCR TESSERACT ==='
+    );
+
+    console.log(ocrText);
+
+    /*
+     * =========================================================
+     * 6. JIKA OCR TIDAK MEMBACA APA-APA
+     * =========================================================
+     */
+
+    if (!ocrText.trim()) {
+
+      await supabase
+        .from('plano_uploads')
+        .update({
+          ocr_status: 'NO_TEXT',
+          ocr_engine: 'Tesseract.js 5.0.5',
+          ocr_text: '',
+          ocr_confidence: confidence,
+          ocr_processed_at: new Date().toISOString()
+        })
+        .eq('id', planoUploadId);
+
+      console.log(
+        `[OCR] Tidak ada text terbaca. ID=${planoUploadId}`
+      );
+
+      return;
+    }
+
+    /*
+     * =========================================================
+     * 7. CARI JUMLAH CALON
+     * =========================================================
+     */
+
+    const { data: mDesa } = await supabase
+      .from('master_desa')
+      .select('jumlah_calon')
+      .eq('kecamatan', petugas.kecamatan)
+      .eq('desa', petugas.desa)
+      .eq('tps', tpsTarget)
+      .maybeSingle();
+
+    const jumlahCalon =
+      mDesa?.jumlah_calon || 2;
+
+    /*
+     * =========================================================
+     * 8. PARSE HASIL OCR
+     * =========================================================
+     */
+
+    const ocrRes =
+      parseOCRVotes(
+        ocrText,
+        jumlahCalon
+      );
+
+    let ocrTotal = 0;
+
+    for (let i = 1; i <= jumlahCalon; i++) {
+
+      const key =
+        `calon_${String(i).padStart(2, '0')}`;
+
+      ocrTotal += Number(
+        ocrRes[key] || 0
+      );
+    }
+
+    ocrTotal += Number(
+      ocrRes.tidak_sah || 0
+    );
+
+    ocrRes.total = ocrTotal;
+
+    /*
+     * =========================================================
+     * 9. SIMPAN HASIL OCR KE plano_uploads
+     * =========================================================
+     */
+
+    const { error: ocrUpdateError } = await supabase
+      .from('plano_uploads')
+      .update({
+        ocr_status: 'COMPLETED',
+        ocr_engine: 'Tesseract.js 5.0.5',
+        ocr_text: ocrText,
+        ocr_calon_01: ocrRes.calon_01,
+        ocr_calon_02: ocrRes.calon_02,
+        ocr_calon_03: ocrRes.calon_03,
+        ocr_calon_04: ocrRes.calon_04,
+        ocr_calon_05: ocrRes.calon_05,
+        ocr_tidak_sah: ocrRes.tidak_sah,
+        ocr_total_suara: ocrTotal,
+        ocr_confidence: confidence,
+        ocr_processed_at: new Date().toISOString(),
+        ocr_error: null
+      })
+      .eq('id', planoUploadId);
+
+    if (ocrUpdateError) {
+      console.error(
+        '[OCR] Gagal menyimpan hasil OCR:',
+        ocrUpdateError.message
+      );
+    }
+
+    /*
+     * =========================================================
+     * 10. AMBIL HASIL MANUAL TERBARU
+     * =========================================================
+     */
+
+    const { data: dbHasilTerbaru } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('id', hasilSuaraId)
+      .maybeSingle();
+
+    if (!dbHasilTerbaru) {
+
+      console.error(
+        `[OCR] hasil_suara ID=${hasilSuaraId} tidak ditemukan`
+      );
+
+      return;
+    }
+
+    /*
+     * =========================================================
+     * 11. JIKA BELUM ADA INPUT MANUAL
+     *
+     * OCR HANYA DISIMPAN SEBAGAI REFERENSI.
+     * LIVE COUNT TIDAK DIUBAH.
+     * =========================================================
+     */
+
+    const belumAdaInputManual =
+      dbHasilTerbaru.suara_calon_01 === null ||
+      dbHasilTerbaru.suara_calon_01 === undefined;
+
+    if (belumAdaInputManual) {
 
       await logAktivitas({
         jenis_aksi: 'UPLOAD_PLANO',
@@ -342,22 +674,56 @@ let ocrText = '';
         desa: petugas.desa,
         tps: tpsTarget,
         data_sesudah: ocrRes,
-        keterangan: `Upload Foto Plano ${customFileName} (Belum ada data input manual)`
+        keterangan:
+          `Upload Foto Plano ${customFileName} - OCR tersimpan, belum ada input manual`
       });
+
       return;
     }
 
+    /*
+     * =========================================================
+     * 12. BANDINGKAN OCR VS INPUT MANUAL
+     * =========================================================
+     */
+
     let isMatch = true;
+
     for (let i = 1; i <= jumlahCalon; i++) {
-      const key = `calon_${String(i).padStart(2, '0')}`;
-      if (Number(dbHasilTerbaru[`suara_${key}`] || 0) !== ocrRes[key]) isMatch = false;
+
+      const key =
+        `calon_${String(i).padStart(2, '0')}`;
+
+      if (
+        Number(
+          dbHasilTerbaru[`suara_${key}`] || 0
+        ) !== Number(ocrRes[key] || 0)
+      ) {
+        isMatch = false;
+      }
     }
-    if (Number(dbHasilTerbaru.suara_tidak_sah || 0) !== ocrRes.tidak_sah) isMatch = false;
+
+    if (
+      Number(dbHasilTerbaru.suara_tidak_sah || 0) !==
+      Number(ocrRes.tidak_sah || 0)
+    ) {
+      isMatch = false;
+    }
+
+    /*
+     * =========================================================
+     * 13. AUTO VERIFIED
+     * =========================================================
+     */
 
     if (isMatch) {
-      await supabase.from('hasil_suara').update({
-        status_verifikasi: 'AUTO VERIFIED'
-      }).eq('id', dbHasilTerbaru.id);
+
+      await supabase
+        .from('hasil_suara')
+        .update({
+          status_verifikasi: 'AUTO VERIFIED'
+        })
+        .eq('id', hasilSuaraId);
 
       await logAktivitas({
         jenis_aksi: 'AUTO_VERIFIED',
@@ -366,55 +732,136 @@ let ocrText = '';
         kecamatan: petugas.kecamatan,
         desa: petugas.desa,
         tps: tpsTarget,
-        data_sesudah: { status_verifikasi: 'AUTO VERIFIED' },
-        keterangan: `Foto Plano TPS ${tpsTarget} terverifikasi otomatis (Sesuai dengan input manual)`
-      });
-
-      await sendMessage(chatId, `✅ <b>FOTO PLANO TPS ${escapeHtml(tpsTarget)} TERVERIFIKASI (AUTO VERIFIED)</b>`);
-    } else {
-      await supabase.from('hasil_suara').update({
-        status_verifikasi: 'PLANO TIDAK SESUAI',
-        ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
-      }).eq('id', dbHasilTerbaru.id);
-
-      await logAktivitas({
-        jenis_aksi: 'PLANO_TIDAK_SESUAI',
-        nrp_saksi: petugas.nrp,
-        nama_saksi: petugas.nama_petugas,
-        kecamatan: petugas.kecamatan,
-        desa: petugas.desa,
-        tps: tpsTarget,
-        data_sebelum: {
-          suara_01: dbHasilTerbaru.suara_calon_01, suara_02: dbHasilTerbaru.suara_calon_02, suara_03: dbHasilTerbaru.suara_calon_03, suara_04: dbHasilTerbaru.suara_calon_04, suara_05: dbHasilTerbaru.suara_calon_05, ts: dbHasilTerbaru.suara_tidak_sah
+        data_sesudah: {
+          status_verifikasi: 'AUTO VERIFIED'
         },
-        data_sesudah: ocrRes,
-        keterangan: `Ketidakcocokan ditemukan antara Foto Plano dan Input Manual TPS ${tpsTarget}`
+        keterangan:
+          `Foto Plano TPS ${tpsTarget} terverifikasi otomatis`
       });
 
-      const manualVote = {
-        calon_01: dbHasilTerbaru.suara_calon_01, calon_02: dbHasilTerbaru.suara_calon_02, calon_03: dbHasilTerbaru.suara_calon_03, calon_04: dbHasilTerbaru.suara_calon_04, calon_05: dbHasilTerbaru.suara_calon_05,
-        tidak_sah: dbHasilTerbaru.suara_tidak_sah, total: dbHasilTerbaru.total_suara_masuk
-      };
-      
-      let ocrTotal = 0;
-      for (let i = 1; i <= jumlahCalon; i++) ocrTotal += ocrRes[`calon_${String(i).padStart(2, '0')}`];
-      ocrTotal += ocrRes.tidak_sah;
-      ocrRes.total = ocrTotal;
+      await sendMessage(
+        chatId,
+        `✅ <b>FOTO PLANO TPS ${escapeHtml(tpsTarget)} TERVERIFIKASI (AUTO VERIFIED)</b>`
+      );
 
-      const msg = `⚠️ <b>DITEMUKAN HASIL INPUT DAN PLANO TIDAK SESUAI</b>\n\n` +
-        `📊 <b>HASIL SUARA DICATAT</b>\n${buildSummaryText(tpsTarget, manualVote, jumlahCalon)}\n\n` +
-        `📊 <b>PEMBACAAN PLANO</b>\n${buildSummaryText(tpsTarget, ocrRes, jumlahCalon)}`;
-
-      const keyboard = {
-        inline_keyboard: [
-          [{ text: 'Pakai hasil input manual', callback_data: `USE_MANUAL_${dbHasilTerbaru.id}` }],
-          [{ text: 'Pakai hasil pembacaan plano', callback_data: `USE_PLANO_${dbHasilTerbaru.id}` }]
-        ]
-      };
-      await sendMessage(chatId, msg, keyboard);
+      return;
     }
+
+    /*
+     * =========================================================
+     * 14. PLANO TIDAK SESUAI
+     *
+     * JANGAN mengubah angka Live Count.
+     * Hanya ubah status verifikasi.
+     * =========================================================
+     */
+
+    await supabase
+      .from('hasil_suara')
+      .update({
+        status_verifikasi: 'PLANO TIDAK SESUAI'
+      })
+      .eq('id', hasilSuaraId);
+
+    await logAktivitas({
+      jenis_aksi: 'PLANO_TIDAK_SESUAI',
+      nrp_saksi: petugas.nrp,
+      nama_saksi: petugas.nama_petugas,
+      kecamatan: petugas.kecamatan,
+      desa: petugas.desa,
+      tps: tpsTarget,
+      data_sebelum: {
+        suara_01: dbHasilTerbaru.suara_calon_01,
+        suara_02: dbHasilTerbaru.suara_calon_02,
+        suara_03: dbHasilTerbaru.suara_calon_03,
+        suara_04: dbHasilTerbaru.suara_calon_04,
+        suara_05: dbHasilTerbaru.suara_calon_05,
+        ts: dbHasilTerbaru.suara_tidak_sah
+      },
+      data_sesudah: ocrRes,
+      keterangan:
+        `Ketidakcocokan antara Foto Plano dan Input Manual TPS ${tpsTarget}`
+    });
+
+    const manualVote = {
+      calon_01: dbHasilTerbaru.suara_calon_01,
+      calon_02: dbHasilTerbaru.suara_calon_02,
+      calon_03: dbHasilTerbaru.suara_calon_03,
+      calon_04: dbHasilTerbaru.suara_calon_04,
+      calon_05: dbHasilTerbaru.suara_calon_05,
+      tidak_sah: dbHasilTerbaru.suara_tidak_sah,
+      total: dbHasilTerbaru.total_suara_masuk
+    };
+
+    const msg =
+      `⚠️ <b>DITEMUKAN HASIL INPUT DAN PLANO TIDAK SESUAI</b>\n\n` +
+      `📊 <b>HASIL SUARA DICATAT</b>\n` +
+      `${buildSummaryText(tpsTarget, manualVote, jumlahCalon)}\n\n` +
+      `📊 <b>PEMBACAAN PLANO</b>\n` +
+      `${buildSummaryText(tpsTarget, ocrRes, jumlahCalon)}`;
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: 'Pakai hasil input manual',
+            callback_data:
+              `USE_MANUAL_${hasilSuaraId}`
+          }
+        ],
+        [
+          {
+            text: 'Pakai hasil pembacaan plano',
+            callback_data:
+              `USE_PLANO_${hasilSuaraId}`
+          }
+        ]
+      ]
+    };
+
+    await sendMessage(
+      chatId,
+      msg,
+      keyboard
+    );
+
   } catch (err) {
-    console.error('ERROR PLANO BACKGROUND:', err);
+
+    console.error(
+      '[PLANO] ERROR BACKGROUND:',
+      err?.stack || err?.message || err
+    );
+
+    /*
+     * Jika record plano_uploads sudah berhasil dibuat,
+     * tandai sebagai FAILED.
+     */
+
+    if (planoUploadId) {
+
+      try {
+
+        await supabase
+          .from('plano_uploads')
+          .update({
+            ocr_status: 'FAILED',
+            ocr_error:
+              err?.stack ||
+              err?.message ||
+              String(err),
+            ocr_processed_at:
+              new Date().toISOString()
+          })
+          .eq('id', planoUploadId);
+
+      } catch (dbError) {
+
+        console.error(
+          '[PLANO] Gagal menyimpan error OCR:',
+          dbError?.message || dbError
+        );
+      }
+    }
   }
 }
 
