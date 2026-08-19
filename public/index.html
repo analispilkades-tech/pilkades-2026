@@ -254,7 +254,7 @@
       const tpsVal = document.getElementById("filterTPS").value.toUpperCase().trim();
       const rowsLimit = parseInt(document.getElementById("rowsPerPage").value, 10) || 10;
 
-      // 1. Filter Master Desa untuk statistik Total TPS & DPT
+      // 1. Filter Master Desa untuk statistik Total TPS & Total DPT Target
       const dataSourceMaster = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
       const filteredMaster = dataSourceMaster.filter(item => {
         const itemKec = String(item.kecamatan || '').toUpperCase().trim();
@@ -277,7 +277,6 @@
                (tpsVal === "" || itemTps === tpsVal);
       });
 
-      // Urutkan data terbaru di paling atas
       filteredResults.sort((a, b) => {
         const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -285,7 +284,6 @@
         return Number(b.id || 0) - Number(a.id || 0);
       });
 
-      // KONTROL KARTU CALON: Hanya tampil bila Filter Desa atau Filter TPS aktif!
       const calonSection = document.getElementById("calonCardsSection");
       if (desaVal !== "" || tpsVal !== "") {
         calonSection.classList.remove("hidden");
@@ -299,26 +297,23 @@
     }
 
     function renderDashboardStats(filteredMaster, filteredResults) {
-      // Total TPS Target berdasarkan Filter
       const totalTPSDiperkirakan = filteredMaster.length || filteredResults.length || 0;
       const tpsMasuk = filteredResults.length;
       const tpsPercent = totalTPSDiperkirakan > 0 ? ((tpsMasuk / totalTPSDiperkirakan) * 100).toFixed(1) : "0.0";
 
-      // Total DPT Target berdasarkan Filter
+      // Membaca total_dpt dari master_desa secara spesifik
       const totalDptTarget = filteredMaster.reduce((sum, item) => {
-        const dptVal = Number(item.dpt || item.jumlah_dpt || item.dpt_total || 0);
+        const dptVal = Number(item.total_dpt ?? item.dpt ?? 0);
         return sum + dptVal;
       }, 0);
 
       const totalSuaraMasuk = filteredResults.reduce((sum, item) => sum + Number(item.total_suara_masuk || 0), 0);
       const suaraPercent = totalDptTarget > 0 ? ((totalSuaraMasuk / totalDptTarget) * 100).toFixed(1) : "0.0";
 
-      // Update UI Progress TPS
       document.getElementById("tpsCountText").innerText = `${tpsMasuk} / ${totalTPSDiperkirakan}`;
       document.getElementById("tpsPercentText").innerText = `(${tpsPercent}%)`;
       document.getElementById("tpsProgressBar").style.width = `${Math.min(Number(tpsPercent), 100)}%`;
 
-      // Update UI Total Suara Masuk vs DPT
       const dptFormatted = totalDptTarget > 0 ? totalDptTarget.toLocaleString('id-ID') : '0';
       document.getElementById("suaraCountText").innerText = `${totalSuaraMasuk.toLocaleString('id-ID')} / ${dptFormatted}`;
       document.getElementById("suaraPercentText").innerText = `(${suaraPercent}%)`;
