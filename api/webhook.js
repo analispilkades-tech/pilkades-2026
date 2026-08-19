@@ -193,7 +193,7 @@ function buildSummaryText(tps, voteObj, jumlahCalon) {
 }
 
 /* =========================================================
-   PROSES FOTO PLANO DI LATAR BELAKANG
+   PROSES FOTO PLANO DI LATAR BELAKANG (DIPERBAIKI)
 ========================================================= */
 
 async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas) {
@@ -226,21 +226,53 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       }
     }
 
-    const ocr = await runOCR(imageBuffer);
-    
-    const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
-    const jumlahCalon = mDesa?.jumlah_calon || 2;
-    const ocrRes = parseOCRVotes(ocr.text, jumlahCalon);
-    
+    // 1. AMBIL DATA HASIL SUARA YANG SUDAH ADA DI DATABASE
     const { data: dbHasil } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
     
+    // 2. SIMPAN FILE ID DAN URL DRIVE KE DATABASE TERLEBIH DAHULU AGAR STATUS LANGSUNG BERUBAH
     if (!dbHasil) {
       const payloadPlano = {
-        kecamatan: petugas.kecamatan, desa: petugas.desa, tps: tpsTarget, nrp_saksi: petugas.nrp, nama_saksi: petugas.nama_petugas,
-        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', telegram_photo_file_id: fileId, google_drive_url: googleDriveUrl,
-        ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
+        kecamatan: petugas.kecamatan, 
+        desa: petugas.desa, 
+        tps: tpsTarget, 
+        nrp_saksi: petugas.nrp, 
+        nama_saksi: petugas.nama_petugas,
+        status_verifikasi: 'FOTO PLANO BELUM TERVERIFIKASI', 
+        telegram_photo_file_id: fileId, 
+        google_drive_url: googleDriveUrl
       };
       await supabase.from('hasil_suara').upsert(payloadPlano, { onConflict: 'kecamatan,desa,tps' });
+    } else {
+      await supabase.from('hasil_suara').update({
+        status_verifikasi: dbHasil.status_verifikasi === 'PLANO BELUM TERUNGGAH' ? 'FOTO PLANO BELUM TERVERIFIKASI' : dbHasil.status_verifikasi,
+        telegram_photo_file_id: fileId,
+        google_drive_url: googleDriveUrl
+      }).eq('id', dbHasil.id);
+    }
+
+    // 3. JALANKAN OCR SECARA AMAN (TERPISAH)
+    let ocrText = '';
+    try {
+      const ocr = await runOCR(imageBuffer);
+      ocrText = ocr?.text || '';
+    } catch (ocrErr) {
+      console.error("Proses OCR gagal/timeout:", ocrErr);
+      return; // Foto sudah tersimpan, hentikan proses OCR jika gagal
+    }
+
+    if (!ocrText) return;
+
+    const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
+    const jumlahCalon = mDesa?.jumlah_calon || 2;
+    const ocrRes = parseOCRVotes(ocrText, jumlahCalon);
+    
+    // Ambil data terbaru setelah update awal
+    const { data: dbHasilTerbaru } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
+    if (!dbHasilTerbaru || dbHasilTerbaru.suara_calon_01 === null || dbHasilTerbaru.suara_calon_01 === undefined) {
+      // Jika belum ada input manual, cukup simpan hasil OCR
+      await supabase.from('hasil_suara').update({
+        ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
+      }).eq('id', dbHasilTerbaru.id);
 
       await logAktivitas({
         jenis_aksi: 'UPLOAD_PLANO',
@@ -255,17 +287,18 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       return;
     }
 
+    // Bandingkan dengan input manual jika sudah ada
     let isMatch = true;
     for (let i = 1; i <= jumlahCalon; i++) {
       const key = `calon_${String(i).padStart(2, '0')}`;
-      if (Number(dbHasil[`suara_${key}`] || 0) !== ocrRes[key]) isMatch = false;
+      if (Number(dbHasilTerbaru[`suara_${key}`] || 0) !== ocrRes[key]) isMatch = false;
     }
-    if (Number(dbHasil.suara_tidak_sah || 0) !== ocrRes.tidak_sah) isMatch = false;
+    if (Number(dbHasilTerbaru.suara_tidak_sah || 0) !== ocrRes.tidak_sah) isMatch = false;
 
     if (isMatch) {
       await supabase.from('hasil_suara').update({
-        status_verifikasi: 'AUTO VERIFIED', telegram_photo_file_id: fileId, google_drive_url: googleDriveUrl
-      }).eq('id', dbHasil.id);
+        status_verifikasi: 'AUTO VERIFIED'
+      }).eq('id', dbHasilTerbaru.id);
 
       await logAktivitas({
         jenis_aksi: 'AUTO_VERIFIED',
@@ -274,7 +307,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         kecamatan: petugas.kecamatan,
         desa: petugas.desa,
         tps: tpsTarget,
-        data_sebelum: { status_verifikasi: dbHasil.status_verifikasi },
+        data_sebelum: { status_verifikasi: dbHasilTerbaru.status_verifikasi },
         data_sesudah: { status_verifikasi: 'AUTO VERIFIED' },
         keterangan: `Foto Plano TPS ${tpsTarget} terverifikasi otomatis (Sesuai dengan input manual)`
       });
@@ -282,9 +315,9 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       await sendMessage(chatId, `✅ <b>FOTO PLANO TPS ${escapeHtml(tpsTarget)} TERVERIFIKASI (AUTO VERIFIED)</b>`);
     } else {
       await supabase.from('hasil_suara').update({
-        status_verifikasi: 'PLANO TIDAK SESUAI', telegram_photo_file_id: fileId, google_drive_url: googleDriveUrl,
+        status_verifikasi: 'PLANO TIDAK SESUAI',
         ocr_calon_01: ocrRes.calon_01, ocr_calon_02: ocrRes.calon_02, ocr_calon_03: ocrRes.calon_03, ocr_calon_04: ocrRes.calon_04, ocr_calon_05: ocrRes.calon_05, ocr_tidak_sah: ocrRes.tidak_sah
-      }).eq('id', dbHasil.id);
+      }).eq('id', dbHasilTerbaru.id);
 
       await logAktivitas({
         jenis_aksi: 'PLANO_TIDAK_SESUAI',
@@ -294,15 +327,15 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         desa: petugas.desa,
         tps: tpsTarget,
         data_sebelum: {
-          suara_01: dbHasil.suara_calon_01, suara_02: dbHasil.suara_calon_02, suara_03: dbHasil.suara_calon_03, suara_04: dbHasil.suara_calon_04, suara_05: dbHasil.suara_calon_05, ts: dbHasil.suara_tidak_sah
+          suara_01: dbHasilTerbaru.suara_calon_01, suara_02: dbHasilTerbaru.suara_calon_02, suara_03: dbHasilTerbaru.suara_calon_03, suara_04: dbHasilTerbaru.suara_calon_04, suara_05: dbHasilTerbaru.suara_calon_05, ts: dbHasilTerbaru.suara_tidak_sah
         },
         data_sesudah: ocrRes,
         keterangan: `Ketidakcocokan ditemukan antara Foto Plano dan Input Manual TPS ${tpsTarget}`
       });
 
       const manualVote = {
-        calon_01: dbHasil.suara_calon_01, calon_02: dbHasil.suara_calon_02, calon_03: dbHasil.suara_calon_03, calon_04: dbHasil.suara_calon_04, calon_05: dbHasil.suara_calon_05,
-        tidak_sah: dbHasil.suara_tidak_sah, total: dbHasil.total_suara_masuk
+        calon_01: dbHasilTerbaru.suara_calon_01, calon_02: dbHasilTerbaru.suara_calon_02, calon_03: dbHasilTerbaru.suara_calon_03, calon_04: dbHasilTerbaru.suara_calon_04, calon_05: dbHasilTerbaru.suara_calon_05,
+        tidak_sah: dbHasilTerbaru.suara_tidak_sah, total: dbHasilTerbaru.total_suara_masuk
       };
       
       let ocrTotal = 0;
@@ -316,14 +349,14 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
 
       const keyboard = {
         inline_keyboard: [
-          [{ text: 'Pakai hasil input manual', callback_data: `USE_MANUAL_${dbHasil.id}` }],
-          [{ text: 'Pakai hasil pembacaan plano', callback_data: `USE_PLANO_${dbHasil.id}` }]
+          [{ text: 'Pakai hasil input manual', callback_data: `USE_MANUAL_${dbHasilTerbaru.id}` }],
+          [{ text: 'Pakai hasil pembacaan plano', callback_data: `USE_PLANO_${dbHasilTerbaru.id}` }]
         ]
       };
       await sendMessage(chatId, msg, keyboard);
     }
   } catch (err) {
-    console.error('ERROR PLANO OCR:', err);
+    console.error('ERROR PLANO BACKGROUND:', err);
   }
 }
 
