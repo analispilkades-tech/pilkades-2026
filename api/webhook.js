@@ -350,13 +350,6 @@ export default async function handler(req, res) {
     const text = message.text ? String(message.text).trim() : '';
     const command = commandOf(text);
 
-    // =========================================================================
-    // PENGAMAN UTAMA MASIF: JIKA PESAN DIAWALI '/', PASTIKAN ITU PERINTAH BUKAN PIN
-    // =========================================================================
-    if (text.startsWith('/')) {
-      await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
-    }
-
     if (command === '/start' || command.startsWith('/start@')) {
       const { data: petugas } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', chatId).maybeSingle();
       if (petugas) {
@@ -411,12 +404,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
+const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
     if (waitUser) {
       if (!text.startsWith('/')) {
         if (text === String(waitUser.pin ?? '').trim()) {
-          // [PEMBENAHAN] Mengubah id menjadi idx
-          await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('idx', waitUser.idx);
+          // Lakukan update mutlak mengubah WAIT_ menjadi chatId murni berdasarkan idx
+          const { error: updateErr } = await supabase
+            .from('master_petugas')
+            .update({ chat_id_telegram: chatId })
+            .eq('idx', waitUser.idx);
+
+          if (updateErr) {
+            console.error('GAGAL UPDATE CHAT ID:', updateErr);
+            await sendMessage(chatId, `❌ Terjadi kesalahan sistem saat menyimpan verifikasi.`);
+            return res.status(200).json({ ok: true });
+          }
 
           await logAktivitas({
             jenis_aksi: 'REGISTRASI_SUKSES',
