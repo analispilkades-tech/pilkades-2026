@@ -251,10 +251,16 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
       }).eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget);
     }
 
-    let ocrText = '';
+let ocrText = '';
     try {
       const ocr = await runOCR(imageBuffer);
       ocrText = ocr?.text || '';
+      
+      // TAMBAHKAN INI UNTUK MELIHAT HASIL BACAAN OCR DI LOG VERCEL
+      console.log("=== HASIL MENTAH OCR TESSERACT ===");
+      console.log(ocrText);
+      console.log("TINGKAT KEYAKINAN:", ocr.confidence);
+      
     } catch (ocrErr) {
       console.error("Proses OCR gagal/timeout:", ocrErr);
       return; 
