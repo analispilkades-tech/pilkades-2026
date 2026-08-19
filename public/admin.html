@@ -65,7 +65,7 @@
             </tr>
           </thead>
           <tbody id="adminTableBody" class="divide-y divide-slate-700/50 text-slate-300">
-            <tr><td colspan="6" class="text-center py-8 text-slate-500">Memuat data audit...</td></tr>
+            <tr><td colspan="7" class="text-center py-8 text-slate-500">Memuat data audit...</td></tr>
           </tbody>
         </table>
       </div>
@@ -101,6 +101,114 @@
       }
     }
 
+async function adminVerify(id, action) {
+
+  const item = globalData.find(
+    d => String(d.id) === String(id)
+  );
+
+  if (!item) {
+    alert('Data TPS tidak ditemukan.');
+    return;
+  }
+
+  let pesan = '';
+
+  if (action === 'SAHKAN_MANUAL') {
+
+    pesan =
+      `Sahkan HASIL INPUT MANUAL?\n\n` +
+      `Desa: ${item.desa}\n` +
+      `TPS: ${item.tps}\n\n` +
+      `01: ${item.suara_calon_01 || 0}\n` +
+      `02: ${item.suara_calon_02 || 0}\n` +
+      `Tidak Sah: ${item.suara_tidak_sah || 0}\n` +
+      `Total: ${item.total_suara_masuk || 0}`;
+
+  } else if (action === 'SAHKAN_PLANO') {
+
+    pesan =
+      `Sahkan HASIL PLANO/OCR?\n\n` +
+      `Desa: ${item.desa}\n` +
+      `TPS: ${item.tps}\n\n` +
+      `01: ${item.ocr_calon_01 || 0}\n` +
+      `02: ${item.ocr_calon_02 || 0}\n` +
+      `Tidak Sah: ${item.ocr_tidak_sah || 0}\n` +
+      `Total: ${item.ocr_total_suara || 0}`;
+  }
+
+  if (!confirm(pesan)) {
+    return;
+  }
+
+
+  try {
+
+    const adminNama =
+      localStorage.getItem('adminNama') ||
+      'Admin';
+
+
+    const res = await fetch(
+      '/api/admin-verifikasi',
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json'
+        },
+
+        body: JSON.stringify({
+          id: item.id,
+          action,
+          admin_nama: adminNama
+        })
+      }
+    );
+
+
+    const result =
+      await res.json();
+
+
+    if (!res.ok || !result.ok) {
+
+      throw new Error(
+        result.error ||
+        'Gagal melakukan verifikasi'
+      );
+
+    }
+
+
+    alert(
+      result.message ||
+      'Berhasil'
+    );
+
+
+    /*
+     * Refresh data
+     */
+
+    await fetchAdminData();
+
+
+  } catch (err) {
+
+    console.error(
+      'ADMIN VERIFY ERROR:',
+      err
+    );
+
+    alert(
+      `Gagal: ${err.message}`
+    );
+
+  }
+}
+    
     function setFilterStatus(status) {
       currentFilter = status;
       applyTableFilter();
@@ -141,7 +249,7 @@
       tbody.innerHTML = "";
 
       if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">Tidak ada data dalam kategori ini.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">Tidak ada data dalam kategori ini.</td></tr>`;
         return;
       }
 
@@ -171,9 +279,39 @@
                 ${item.status_verifikasi || 'PENDING'}
               </span>
             </td>
-            <td class="p-3 text-center">
-              ${photoLink}
-            </td>
+<td class="p-3 text-center">
+  ${photoLink}
+</td>
+
+<td class="p-3 text-center">
+  ${
+    item.status_verifikasi ===
+    'MEMERLUKAN VERIFIKASI ADMIN'
+
+    ? `
+      <div class="flex flex-col gap-2 min-w-[150px]">
+
+        <button
+          onclick="adminVerify('${item.id}', 'SAHKAN_MANUAL')"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+          ✅ Sahkan Manual
+        </button>
+
+        <button
+          onclick="adminVerify('${item.id}', 'SAHKAN_PLANO')"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold">
+          📊 Sahkan Plano
+        </button>
+
+      </div>
+    `
+    : `
+      <span class="text-slate-500 text-xs">
+        Tidak ada aksi
+      </span>
+    `
+  }
+</td>
           </tr>
         `;
       });
