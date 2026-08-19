@@ -135,30 +135,23 @@ async function runOCR(imageBuffer) {
   try {
     console.log('[OCR] Membuat worker Tesseract...');
 
-    worker = await createWorker(
-      'eng',
-      1,
-      {
-        workerPath:
-          'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/worker.min.js',
+    worker = await createWorker('eng', 1, {
+      corePath:
+        'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0',
 
-        corePath:
-          'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0',
+      langPath:
+        'https://tessdata.projectnaptha.com/4.0.0',
 
-        langPath:
-          'https://tessdata.projectnaptha.com/4.0.0',
+      cachePath: '/tmp',
 
-        cachePath: '/tmp',
-
-        logger: (m) => {
-          if (m?.status) {
-            console.log(
-              `[OCR] ${m.status} ${Math.round((m.progress || 0) * 100)}%`
-            );
-          }
+      logger: (m) => {
+        if (m?.status) {
+          console.log(
+            `[OCR] ${m.status} ${Math.round((m.progress || 0) * 100)}%`
+          );
         }
       }
-    );
+    });
 
     console.log('[OCR] Worker siap.');
 
@@ -173,7 +166,9 @@ async function runOCR(imageBuffer) {
     const result = await worker.recognize(imageBuffer);
 
     const text = result?.data?.text || '';
-    const confidence = Number(result?.data?.confidence || 0);
+    const confidence = Number(
+      result?.data?.confidence || 0
+    );
 
     console.log('[OCR] Selesai.');
     console.log('[OCR] Confidence:', confidence);
@@ -185,21 +180,26 @@ async function runOCR(imageBuffer) {
     };
 
   } catch (error) {
+
     console.error(
       '[OCR] ERROR:',
-      error?.stack || error?.message || error
+      error?.stack ||
+      error?.message ||
+      error
     );
 
     throw error;
 
   } finally {
+
     if (worker) {
       try {
         await worker.terminate();
       } catch (terminateError) {
         console.error(
           '[OCR] Gagal terminate worker:',
-          terminateError?.message || terminateError
+          terminateError?.message ||
+          terminateError
         );
       }
     }
