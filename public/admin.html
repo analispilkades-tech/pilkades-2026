@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Verifikasi & Second Audit - Pilkades Serempak Kab. Wonosobo 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Proteksi Halaman Admin (Route Guard)
+    const token = localStorage.getItem("adminToken");
+    if (!token) {
+      window.location.href = "/login";
+    }
+
+    function handleLogout() {
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("adminNama");
+      window.location.href = "/login";
+    }
+  </script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col justify-between">
+
+  <div>
+    <!-- Header Admin -->
+    <header class="bg-slate-900 text-white p-4 shadow-lg">
+      <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 class="text-xl font-bold">PANEL AUDIT & VERIFIKASI C1</h1>
+          <p class="text-xs text-slate-400">Khusus Verifikator Internal Polres Wonosobo</p>
+        </div>
+        
+        <div class="flex items-center space-x-4">
+          <div class="bg-amber-500/20 border border-amber-500 text-amber-300 px-3 py-1.5 rounded-full text-xs font-semibold">
+            <span id="pendingCount">0</span> TPS Membutuhkan Audit
+          </div>
+          
+          <div class="flex items-center space-x-3 border-l border-slate-700 pl-4">
+            <span class="text-xs text-slate-300">Logged as: <strong id="userDisplay" class="text-white">Admin</strong></span>
+            <button onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">
+              Keluar (Logout)
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-6">
+      <!-- Filter Status -->
+      <div class="flex flex-wrap gap-2 mb-6">
+        <button onclick="filterStatus('NEEDS_AUDIT')" class="px-4 py-2 bg-amber-600 text-white font-medium rounded-lg shadow hover:bg-amber-700 text-sm">
+          ⚠️ Perlu Audit (Pending)
+        </button>
+        <button onclick="filterStatus('AUTO_VERIFIED')" class="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 text-sm">
+          ✅ Auto Verified
+        </button>
+        <button onclick="filterStatus('ALL')" class="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 text-sm">
+          📋 Semua Data TPS
+        </button>
+      </div>
+
+      <!-- Container Utama (Sanding Data) -->
+      <div id="auditContainer" class="space-y-6">
+        <div class="text-center py-12 text-slate-500">Memuat data verifikasi...</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Footer Copyright Admin -->
+  <footer class="mt-12 py-6 border-t border-slate-200 text-center text-xs text-slate-500 bg-white">
+    <p>&copy; 2026 brengos ntd. All Rights Reserved.</p>
+    <p class="mt-1 text-slate-400">Sistem Perhitungan Cepat & Audit C1 Terintegrasi</p>
+  </footer>
+
+  <script>
+    document.getElementById("userDisplay").innerText = localStorage.getItem("adminNama") || "Admin";
+
+    const GET_DATA_URL = "/api/get-data";
+    const ACTION_URL = "/api/admin-action";
+    let allData = [];
+
+    async function loadAuditData() {
+      try {
+        const res = await fetch(GET_DATA_URL);
+        allData = await res.json();
+        filterStatus('NEEDS_AUDIT');
+      } catch (err) {
+        console.error("Gagal mengambil data audit:", err);
+      }
+    }
+
+    function filterStatus(status) {
+      const container = document.getElementById("auditContainer");
+      container.innerHTML = "";
+
+      let filtered = allData;
+      if (status !== 'ALL') {
+        filtered = allData.filter(d => d.status_verifikasi === status);
+      }
+
+      document.getElementById("pendingCount").innerText = allData.filter(d => d.status_verifikasi === 'NEEDS_AUDIT').length;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="bg-white p-8 rounded-xl shadow text-center text-slate-500">
+          🎉 Tidak ada data TPS yang memerlukan verifikasi manual saat ini.
+        </div>`;
+        return;
+      }
+
+      filtered.forEach(item => {
+        container.innerHTML += `
+          <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden grid grid-cols-1 md:grid-cols-2">
+            <!-- SISI KIRI: Foto C1 Plano -->
+            <div class="p-4 bg-slate-900 flex flex-col justify-center items-center">
+              <span class="text-xs text-slate-400 mb-2">Foto C1 Plano dari Saksi</span>
+              <a href="${item.url_foto_c1}" target="_blank" title="Klik untuk memperbesar">
+                <img src="${item.url_foto_c1}" alt="Foto C1 TPS" class="max-h-96 object-contain rounded border border-slate-700 hover:opacity-90 transition">
+              </a>
+              <span class="text-xs text-slate-500 mt-2">Klik gambar untuk melihat resolusi penuh</span>
+            </div>
+
+            <!-- SISI KANAN: Perbandingan Angka & Aksi -->
+            <div class="p-6 flex flex-col justify-between">
+              <div>
+                <div class="flex justify-between items-start mb-4">
+                  <div>
+                    <span class="text-xs font-bold text-blue-600 uppercase tracking-wide">${item.kecamatan} • ${item.desa}</span>
+                    <h3 class="text-xl font-extrabold text-slate-800">${item.tps}</h3>
+                    <p class="text-xs text-slate-500">Saksi: ${item.nama_saksi} (NRP: ${item.nrp_saksi})</p>
+                  </div>
+                  <span class="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-xs font-bold">
+                    ${item.status_verifikasi}
+                  </span>
+                </div>
+
+                <!-- Tabel Perolehan Suara (Hingga 5 Calon) -->
+                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 mb-4 space-y-2">
+                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
+                    <span>Suara Calon 01:</span>
+                    <span class="font-bold text-slate-800">${item.suara_calon_01 || 0}</span>
+                  </div>
+                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
+                    <span>Suara Calon 02:</span>
+                    <span class="font-bold text-slate-800">${item.suara_calon_02 || 0}</span>
+                  </div>
+                  ${item.suara_calon_03 ? `
+                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
+                    <span>Suara Calon 03:</span>
+                    <span class="font-bold text-slate-800">${item.suara_calon_03}</span>
+                  </div>` : ''}
+                  ${item.suara_calon_04 ? `
+                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
+                    <span>Suara Calon 04:</span>
+                    <span class="font-bold text-slate-800">${item.suara_calon_04}</span>
+                  </div>` : ''}
+                  ${item.suara_calon_05 ? `
+                  <div class="flex justify-between text-sm py-1 border-b border-slate-200">
+                    <span>Suara Calon 05:</span>
+                    <span class="font-bold text-slate-800">${item.suara_calon_05}</span>
+                  </div>` : ''}
+                  <div class="flex justify-between text-sm py-1 border-b border-slate-200 text-red-600">
+                    <span>Suara Tidak Sah:</span>
+                    <span class="font-bold">${item.suara_tidak_sah || 0}</span>
+                  </div>
+                  <div class="flex justify-between text-base py-1 font-extrabold text-blue-900">
+                    <span>Total Suara Masuk:</span>
+                    <span>${item.total_suara_masuk || 0}</span>
+                  </div>
+                </div>
+
+                <div class="text-xs bg-amber-50 text-amber-800 p-3 rounded border border-amber-200 mb-4">
+                  📌 <strong>Catatan Audit:</strong> Pastikan angka perolehan suara pada tabel di atas cocok dengan berkas foto C1 Plano di sebelah kiri.
+                </div>
+              </div>
+
+              <!-- Tombol Keputusan Admin -->
+              <div class="flex space-x-3 pt-4 border-t border-slate-100">
+                <button onclick="updateStatus('${item.kecamatan}', '${item.desa}', '${item.tps}', 'VERIFIED')" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow text-sm transition">
+                  ✅ Sahkan Data
+                </button>
+                <button onclick="updateStatus('${item.kecamatan}', '${item.desa}', '${item.tps}', 'REJECTED')" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow text-sm transition">
+                  ❌ Tolak & Minta Revisi
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    async function updateStatus(kecamatan, desa, tps, newStatus) {
+      if (!confirm(`Konfirmasi perubahan status ${tps} Desa ${desa} menjadi ${newStatus}?`)) return;
+
+      try {
+        const res = await fetch(ACTION_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "updateStatus", kecamatan: kecamatan, desa: desa, tps: tps, status: newStatus })
+        });
+        
+        if (res.ok) {
+          alert(`Status ${tps} Desa ${desa} berhasil diperbarui!`);
+          loadAuditData(); // Refresh tampilan
+        } else {
+          alert("Gagal memperbarui status data.");
+        }
+      } catch (err) {
+        alert("Terjadi kesalahan koneksi ke server.");
+      }
+    }
+
+    // Load data awal
+    loadAuditData();
+  </script>
+</body>
+</html>
