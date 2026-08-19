@@ -1,3 +1,4 @@
+import https from 'https';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -7,57 +8,67 @@ const supabase = createClient(
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-// Helper sendMessage yang tahan banting (Fail-Safe Fetch dengan Timeout 5 detik)
-async function sendMessage(chatId, text, replyMarkup = null) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+// Agent HTTPS untuk mencegah koneksi terputus (TLS socket disconnect)
+const agent = new https.Agent({
+  keepAlive: true,
+  rejectUnauthorized: true
+});
 
-  const payload = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: 'HTML'
-  };
-  if (replyMarkup) payload.reply_markup = replyMarkup;
-
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal
+// Helper SendMessage menggunakan modul HTTPS bawaan Node.js
+function sendMessage(chatId, text, replyMarkup = null) {
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: replyMarkup
     });
-    clearTimeout(timeoutId);
-    return await response.json();
-  } catch (e) {
-    console.error('Error SendMessage:', e.message);
-    return null;
-  }
+
+    const options = {
+      hostname: 'api.telegram.org',
+      port: 443,
+      path: `/bot${BOT_TOKEN}/sendMessage`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      },
+      agent: agent,
+      timeout: 8000
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => { resolve(data); });
+    });
+
+    req.on('error', (e) => {
+      console.error('Error SendMessage HTTPS:', e.message);
+      resolve(null);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+
+    req.write(payload);
+    req.end();
+  });
 }
 
 export default async function handler(req, res) {
-  // 1. Terima Method POST
-  if (req.method !== 'POST') {
-    return res.status(200).send('API Webhook Pilkades Active');
-  }
+  if (req.method !== 'POST') return res.status(200).send('OK');
 
-  // 2. Kirim respon HTTP 200 OK secara INSTAN ke Telegram agar tidak timeout
-  res.status(200).json({ ok: true });
+  const update = req.body;
+  if (!update || !update.message) return res.status(200).json({ ok: true });
+
+  const chatId = String(update.message.chat.id);
+  const text = update.message.text ? update.message.text.trim() : '';
 
   try {
-    // 3. Parse Body dengan Aman
-    let update = req.body;
-    if (typeof update === 'string') {
-      update = JSON.parse(update);
-    }
-
-    if (!update || !update.message) return;
-
-    const chatId = String(update.message.chat.id);
-    const text = update.message.text ? update.message.text.trim() : '';
-
-    // ===================================================
-    // 1. COMMAND /start (Murni String, Tanpa DB)
-    // ===================================================
+    // 1. COMMAND /start (Langsung kirim balasan tanpa kueri DB)
     if (text === '/start') {
       await sendMessage(
         chatId,
@@ -65,12 +76,10 @@ export default async function handler(req, res) {
         `Ketik <code>/reg&lt;spasi&gt;NRP</code> untuk registrasi\n` +
         `<i>(Contoh: <code>/reg 89080060</code>)</i>`
       );
-      return;
+      return res.status(200).json({ ok: true });
     }
 
-    // ===================================================
     // 2. COMMAND /reg <NRP>
-    // ===================================================
     if (text.toLowerCase().startsWith('/reg')) {
       const parts = text.split(' ');
       const nrpInput = parts.length > 1 ? parts[1].trim() : '';
@@ -80,7 +89,7 @@ export default async function handler(req, res) {
           chatId,
           `⚠️ Format salah. Ketik <code>/reg&lt;spasi&gt;NRP</code>\n<i>Contoh: <code>/reg 89080060</code></i>`
         );
-        return;
+        return res.status(200).json({ ok: true });
       }
 
       const { data: petugas, error: errSearch } = await supabase
@@ -94,7 +103,7 @@ export default async function handler(req, res) {
           chatId,
           `❌ <b>NRP tidak terdaftar!</b>\n\nSilakan hubungi Admin Panitia untuk pendaftaran petugas lapangan.`
         );
-        return;
+        return res.status(200).json({ ok: true });
       }
 
       await supabase
@@ -107,12 +116,10 @@ export default async function handler(req, res) {
         `Halo <b>${petugas.nama_petugas}</b>, NRP Anda terverifikasi.\n\n` +
         `Silakan masukkan <b>PIN Rahasia</b> Anda:`
       );
-      return;
+      return res.status(200).json({ ok: true });
     }
 
-    // ===================================================
-    // 3. PROSES VERIFIKASI PIN
-    // ===================================================
+    // 3. VERIFIKASI PIN
     const { data: petugasWait } = await supabase
       .from('master_petugas')
       .select('*')
@@ -133,17 +140,16 @@ export default async function handler(req, res) {
           `• Desa : <b>${petugasWait.desa}</b>\n\n` +
           `Ketik <b>/kirimhasil</b> untuk melaporkan hasil, dan ikuti panduannya.`
         );
-        return;
+        return res.status(200).json({ ok: true });
       } else {
         await sendMessage(
           chatId,
           `❌ <b>PIN Salah!</b> Silakan masukkan PIN Rahasia Anda dengan benar:`
         );
-        return;
+        return res.status(200).json({ ok: true });
       }
     }
 
-    // Ambil akun petugas aktif
     const { data: petugasLogin } = await supabase
       .from('master_petugas')
       .select('*')
@@ -155,12 +161,10 @@ export default async function handler(req, res) {
         chatId,
         `Ketik <code>/reg&lt;spasi&gt;NRP</code> untuk melakukan registrasi.`
       );
-      return;
+      return res.status(200).json({ ok: true });
     }
 
-    // ===================================================
     // 4. COMMAND /kirimhasil
-    // ===================================================
     if (text === '/kirimhasil') {
       const { data: daftarTps } = await supabase
         .from('master_desa')
@@ -185,12 +189,10 @@ export default async function handler(req, res) {
           one_time_keyboard: true
         }
       );
-      return;
+      return res.status(200).json({ ok: true });
     }
 
-    // ===================================================
-    // 5. INPUT PILIHAN TPS
-    // ===================================================
+    // 5. PILIHAN TPS
     if (text.startsWith('📍') || text.toLowerCase().startsWith('tps')) {
       const tpsSelected = text.replace('📍', '').trim();
 
@@ -206,12 +208,10 @@ export default async function handler(req, res) {
         `<code>[Calon 01]#[Calon 02]#[Calon 03]#[Tidak Sah]</code>\n\n` +
         `<i>Contoh: 120#80#40#10</i>`
       );
-      return;
+      return res.status(200).json({ ok: true });
     }
 
-    // ===================================================
-    // 6. INPUT ANGKA SUARA (#)
-    // ===================================================
+    // 6. INPUT SUARA (#)
     if (text.includes('#')) {
       const rawArray = text.split('#').map(a => parseInt(a.trim()) || 0);
       const tpsTarget = petugasLogin.tps_aktif || 'TPS 01';
@@ -245,7 +245,7 @@ export default async function handler(req, res) {
 
       if (error) {
         await sendMessage(chatId, `❌ Gagal menyimpan data: ${error.message}`);
-        return;
+        return res.status(200).json({ ok: true });
       }
 
       await sendMessage(
@@ -261,47 +261,18 @@ export default async function handler(req, res) {
         `• Total Suara Masuk: <b>${totalSuara}</b>\n\n` +
         `Langkah 3: Silakan ambil/upload <b>Foto Lembar C1 Plano</b> dari HP Anda.`
       );
-      return;
+      return res.status(200).json({ ok: true });
     }
 
-    // ===================================================
-    // 7. INPUT FOTO C1 PLANO
-    // ===================================================
-    if (update.message.photo && update.message.photo.length > 0) {
-      const photoObj = update.message.photo[update.message.photo.length - 1];
-      const resInfo = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${photoObj.file_id}`);
-      const dataFile = await resInfo.json();
-
-      let photoUrl = "";
-      if (dataFile.ok) {
-        photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${dataFile.result.file_path}`;
-      }
-
-      const tpsTarget = petugasLogin.tps_aktif || 'TPS 01';
-
-      await supabase
-        .from('hasil_suara')
-        .update({ url_foto_c1: photoUrl })
-        .eq('kecamatan', petugasLogin.kecamatan)
-        .eq('desa', petugasLogin.desa)
-        .eq('tps', tpsTarget);
-
-      await sendMessage(
-        chatId,
-        `🎉 <b>PENGIRIMAN DATA SELESAI!</b>\n\n` +
-        `Foto C1 Plano untuk <b>${tpsTarget} Desa ${petugasLogin.desa}</b> berhasil diunggah.\n` +
-        `Data perolehan suara telah masuk ke Live Count.`
-      );
-      return;
-    }
-
-    // Respon default
+    // Default Respon
     await sendMessage(
       chatId,
       `Ketik <b>/kirimhasil</b> untuk melaporkan hasil suara atau ketik <b>/start</b> untuk menu utama.`
     );
 
   } catch (err) {
-    console.error('Error Webhook Handler:', err);
+    console.error('Error Webhook:', err);
   }
+
+  return res.status(200).json({ ok: true });
 }
