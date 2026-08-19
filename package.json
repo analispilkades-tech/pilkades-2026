@@ -1,8 +1,10 @@
 {
   "name": "pilkades-node-vercel",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "api/webhook.js",
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "@vercel/functions": "^2.0.0",
+    "tesseract.js": "^7.0.0"
   }
 }
