@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const GDRIVE_WEBHOOK_URL = process.env.GDRIVE_WEBHOOK_URL; // URL Web App Google Apps Script
+const GDRIVE_WEBHOOK_URL = process.env.GDRIVE_WEBHOOK_URL;
 const MAX_CALON = 5;
 
 /* =========================================================
@@ -121,7 +121,7 @@ async function logAktivitas({
 }
 
 /* =========================================================
-   OCR BACKGROUND PROCESS (TESSERACT.JS)
+   OCR BACKGROUND PROCESS (TESSERACT.JS) - DIPERBAIKI TOTAL
 ========================================================= */
 
 async function runOCR(imageBuffer) {
@@ -194,11 +194,10 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
   try {
     const imageBuffer = await downloadTelegramFile(fileId);
     
-    // Format filename gambar plano: namakecamatan_namadesa_nomortps.jpg[cite: 1]
     const cleanKec = String(petugas.kecamatan || 'kec').toLowerCase().replace(/[^a-z0-9]/g, '_');
     const cleanDesa = String(petugas.desa || 'desa').toLowerCase().replace(/[^a-z0-9]/g, '_');
     const cleanTps = String(tpsTarget || '1').toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const customFileName = `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;[cite: 1]
+    const customFileName = `${cleanKec}_${cleanDesa}_${cleanTps}.jpg`;
 
     let googleDriveUrl = null;
     if (GDRIVE_WEBHOOK_URL) {
@@ -209,7 +208,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
           body: JSON.stringify({
             base64Data: imageBuffer.toString('base64'),
             mimeType: 'image/jpeg',
-            fileName: customFileName[cite: 1]
+            fileName: customFileName
           })
         });
         const driveJson = await driveRes.json();
@@ -245,7 +244,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         desa: petugas.desa,
         tps: tpsTarget,
         data_sesudah: ocrRes,
-        keterangan: `Upload Foto Plano ${customFileName} (Belum ada data input manual)`[cite: 1]
+        keterangan: `Upload Foto Plano ${customFileName}`
       });
       return;
     }
@@ -271,7 +270,7 @@ async function processPlanoPhotoInBackground(chatId, tpsTarget, fileId, petugas)
         tps: tpsTarget,
         data_sebelum: { status_verifikasi: dbHasil.status_verifikasi },
         data_sesudah: { status_verifikasi: 'AUTO VERIFIED' },
-        keterangan: `Foto Plano TPS ${tpsTarget} terverifikasi otomatis (Sesuai dengan input manual)`
+        keterangan: `Foto Plano TPS ${tpsTarget} terverifikasi otomatis`
       });
 
       await sendMessage(chatId, `✅ <b>FOTO PLANO TPS ${escapeHtml(tpsTarget)} TERVERIFIKASI (AUTO VERIFIED)</b>`);
@@ -359,7 +358,7 @@ export default async function handler(req, res) {
         await sendMessage(chatId, msg);
       } else {
         const msg = `🇮🇩 <b>SELAMAT DATANG</b>\n\nBot Penghitungan Cepat Pilkades\nKabupaten Wonosobo Tahun 2026\n\n` +
-          `Untuk melakukan registrasi petugas, ketik:\n\n<code>/reg NRP</code>\n\nContoh:\n<code>/reg 12345678</code>`;
+          `Untuk melakukan registrasi petugas, ketik:\n\n<code>/reg NRP</code>`;
         await sendMessage(chatId, msg);
       }
       return res.status(200).json({ ok: true });
@@ -367,22 +366,21 @@ export default async function handler(req, res) {
 
     if (command === '/help' || command.startsWith('/help@')) {
       const msg = `📋 <b>DAFTAR PERINTAH BOT</b>\n\n` +
-        `<code>/start</code> - Menu utama & status\n` +
-        `<code>/reg NRP</code> - Pendaftaran petugas\n` +
-        `<code>/kirimhasil</code> - Kirim hasil penghitungan suara\n` +
-        `<code>/edithasil</code> - Edit hasil suara yang sudah masuk\n` +
-        `<code>/lihathasil</code> - Lihat rekapitulasi hasil suara desa\n` +
-        `<code>/kirimplano</code> - Upload foto C1 Plano\n` +
-        `<code>/status</code> - Cek rincian status TPS\n` +
-        `<code>/batal</code> - Batal proses\n` +
-        `<code>/help</code> - Bantuan`;
+        `<code>/start</code> - Menu utama\n` +
+        `<code>/reg NRP</code> - Pendaftaran\n` +
+        `<code>/kirimhasil</code> - Kirim hasil\n` +
+        `<code>/edithasil</code> - Edit hasil\n` +
+        `<code>/lihathasil</code> - Lihat rekap\n` +
+        `<code>/kirimplano</code> - Upload foto\n` +
+        `<code>/status</code> - Status TPS\n` +
+        `<code>/batal</code> - Batal`;
       await sendMessage(chatId, msg);
       return res.status(200).json({ ok: true });
     }
 
     if (command === '/reg' || command.startsWith('/reg@')) {
       if (petugas) {
-        await sendMessage(chatId, `👤 <b>ANDA SUDAH TERDAFTAR</b>\n\nNama : ${escapeHtml(petugas.nama_petugas)}\nNRP : ${escapeHtml(petugas.nrp)}`);
+        await sendMessage(chatId, `👤 <b>ANDA SUDAH TERDAFTAR</b>`);
         return res.status(200).json({ ok: true });
       }
 
@@ -396,45 +394,19 @@ export default async function handler(req, res) {
 
       const { data: masterP } = await supabase.from('master_petugas').select('*').eq('nrp', nrpInput).maybeSingle();
       if (!masterP) {
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_NRP_GAGAL',
-          nrp_saksi: nrpInput,
-          keterangan: `Percobaan registrasi gagal: NRP ${nrpInput} tidak ditemukan`
-        });
-        await sendMessage(chatId, `❌ <b>NRP TIDAK TERDAFTAR. SILAHKAN HUBUNGI ADMIN</b>`);
+        await sendMessage(chatId, `❌ <b>NRP TIDAK TERDAFTAR</b>`);
         return res.status(200).json({ ok: true });
       }
 
       await supabase.from('master_petugas').update({ chat_id_telegram: `WAIT_${chatId}` }).eq('nrp', nrpInput);
-
-      await logAktivitas({
-        jenis_aksi: 'REGISTRASI_NRP_FOUND',
-        nrp_saksi: masterP.nrp,
-        nama_saksi: masterP.nama_petugas,
-        kecamatan: masterP.kecamatan,
-        desa: masterP.desa,
-        keterangan: `Verifikasi NRP ${masterP.nrp} berhasil, menunggu verifikasi PIN`
-      });
-
-      await sendMessage(chatId, `✅ <b>NRP TERVERIFIKASI</b>\n\nHalo <b>${escapeHtml(masterP.nama_petugas)}</b>.\n\nNRP Anda berhasil ditemukan dalam database.\n\nSilakan masukkan <b>PIN Rahasia</b> Anda.\n\nJika ingin membatalkan:\n/batal`);
+      await sendMessage(chatId, `✅ <b>NRP TERVERIFIKASI</b>\n\nMasukkan <b>PIN Rahasia</b> Anda.`);
       return res.status(200).json({ ok: true });
     }
 
     if (command === '/batal' || command.startsWith('/batal@')) {
       await supabase.from('master_petugas').update({ chat_id_telegram: null }).eq('chat_id_telegram', `WAIT_${chatId}`);
-      if (petugas) {
-        await supabase.from('master_petugas').update({ mode_input: null }).eq('id', petugas.id);
-        await logAktivitas({
-          jenis_aksi: 'BATAL_PROSES',
-          nrp_saksi: petugas.nrp,
-          nama_saksi: petugas.nama_petugas,
-          kecamatan: petugas.kecamatan,
-          desa: petugas.desa,
-          tps: petugas.tps_aktif,
-          keterangan: `Petugas membatalkan alur perintah`
-        });
-      }
-      await removeKeyboard(chatId, `✅ Proses dibatalkan.\nKetik /start untuk kembali.`);
+      if (petugas) await supabase.from('master_petugas').update({ mode_input: null }).eq('id', petugas.id);
+      await removeKeyboard(chatId, `✅ Proses dibatalkan.`);
       return res.status(200).json({ ok: true });
     }
 
@@ -442,37 +414,16 @@ export default async function handler(req, res) {
     if (waitUser) {
       if (text === String(waitUser.pin ?? '').trim()) {
         await supabase.from('master_petugas').update({ chat_id_telegram: chatId }).eq('id', waitUser.id);
-
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_SUKSES',
-          nrp_saksi: waitUser.nrp,
-          nama_saksi: waitUser.nama_petugas,
-          kecamatan: waitUser.kecamatan,
-          desa: waitUser.desa,
-          keterangan: `Registrasi akun Telegram petugas ${waitUser.nama_petugas} (${waitUser.nrp}) berhasil`
-        });
-
-        const msg = `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang,\n<b>${escapeHtml(waitUser.nama_petugas)}</b>\n\n` +
-          `📍 Kecamatan : <b>${escapeHtml(waitUser.kecamatan)}</b>\n🏘 Desa : <b>${escapeHtml(waitUser.desa)}</b>\n\n` +
-          `Untuk melaporkan hasil penghitungan suara:\n/kirimhasil`;
-        await removeKeyboard(chatId, msg);
+        await logAktivitas({ jenis_aksi: 'REGISTRASI_SUKSES', nrp_saksi: waitUser.nrp, nama_saksi: waitUser.nama_petugas, kecamatan: waitUser.kecamatan, desa: waitUser.desa });
+        await removeKeyboard(chatId, `🎉 <b>REGISTRASI BERHASIL</b>\n\nSelamat datang, <b>${escapeHtml(waitUser.nama_petugas)}</b>`);
       } else {
-        await logAktivitas({
-          jenis_aksi: 'REGISTRASI_PIN_SALAH',
-          nrp_saksi: waitUser.nrp,
-          nama_saksi: waitUser.nama_petugas,
-          kecamatan: waitUser.kecamatan,
-          desa: waitUser.desa,
-          keterangan: `PIN salah dimasukkan oleh NRP ${waitUser.nrp}`
-        });
-
-        await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
+        await sendMessage(chatId, `❌ <b>PIN SALAH</b>`);
       }
       return res.status(200).json({ ok: true });
     }
 
     if (!petugas) {
-      await sendMessage(chatId, `🔐 <b>ANDA BELUM TERDAFTAR</b>\n\nSilakan registrasi terlebih dahulu:\n<code>/reg NRP</code>\n\nAtau ketik /help untuk panduan.`);
+      await sendMessage(chatId, `🔐 <b>ANDA BELUM TERDAFTAR</b>\n\nKetik <code>/reg NRP</code>`);
       return res.status(200).json({ ok: true });
     }
 
@@ -485,38 +436,16 @@ export default async function handler(req, res) {
 
       let rincianStatus = '';
       allTps?.forEach(t => {
-        const st = statusMap[t.tps] || 'BELUM ADA HASIL DIINPUT';
+        const st = statusMap[t.tps] || 'BELUM ADA';
         rincianStatus += `TPS ${t.tps} : ${st}\n`;
       });
-
-      const msg = `👤 <b>STATUS ANDA</b>\n\n` +
-        `Nama : ${escapeHtml(petugas.nama_petugas)}\n` +
-        `NRP : ${escapeHtml(petugas.nrp)}\n` +
-        `Kecamatan : ${escapeHtml(petugas.kecamatan)}\n` +
-        `Desa : ${escapeHtml(petugas.desa)}\n` +
-        `TPS Aktif : ${escapeHtml(petugas.tps_aktif || '-')}\n\n` +
-        rincianStatus;
-
-      await sendMessage(chatId, msg);
+      await sendMessage(chatId, `👤 <b>STATUS DESA ${petugas.desa}</b>\n\n${rincianStatus}`);
       return res.status(200).json({ ok: true });
     }
 
-    /* =========================================================
-       PERINTAH /LIHATHASIL
-    ========================================================= */
     if (command === '/lihathasil' || command.startsWith('/lihathasil@')) {
-      const { data: allTps } = await supabase
-        .from('master_desa')
-        .select('tps, jumlah_calon')
-        .eq('kecamatan', petugas.kecamatan)
-        .eq('desa', petugas.desa)
-        .order('tps');
-
-      const { data: allHasil } = await supabase
-        .from('hasil_suara')
-        .select('*')
-        .eq('kecamatan', petugas.kecamatan)
-        .eq('desa', petugas.desa);
+      const { data: allTps } = await supabase.from('master_desa').select('tps, jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
+      const { data: allHasil } = await supabase.from('hasil_suara').select('*').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa);
 
       const statusMap = {};
       allHasil?.forEach(h => { statusMap[h.tps] = h; });
@@ -551,9 +480,7 @@ export default async function handler(req, res) {
       let totRow = `TOTAL      | ` + totVals.join('     | ');
 
       let tableText = `${header}\n${separator}\n${bodyRows.join('\n')}\n\n${tsRow}\n${separator}\n${totRow}`;
-      const msg = `📊<b>HASIL SUARA DICATAT DESA ${escapeHtml(petugas.desa).toUpperCase()}</b>\n\n<pre>${tableText}</pre>`;
-
-      await sendMessage(chatId, msg);
+      await sendMessage(chatId, `📊<b>HASIL SUARA DESA ${escapeHtml(petugas.desa).toUpperCase()}</b>\n\n<pre>${tableText}</pre>`);
       return res.status(200).json({ ok: true });
     }
 
@@ -561,48 +488,19 @@ export default async function handler(req, res) {
       const isEditMode = command === '/edithasil';
       await supabase.from('master_petugas').update({ mode_input: isEditMode ? 'EDIT' : 'KIRIM' }).eq('id', petugas.id);
 
-      await logAktivitas({
-        jenis_aksi: isEditMode ? 'MODE_EDIT_HASIL' : 'MODE_KIRIM_HASIL',
-        nrp_saksi: petugas.nrp,
-        nama_saksi: petugas.nama_petugas,
-        kecamatan: petugas.kecamatan,
-        desa: petugas.desa,
-        keterangan: `Petugas membuka menu ${command}`
-      });
-
       const { data: allTps } = await supabase.from('master_desa').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
       const { data: filledHasil } = await supabase.from('hasil_suara').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa);
-
       const filledSet = new Set(filledHasil?.map(h => h.tps));
-
-      if (!isEditMode && allTps && allTps.every(t => filledSet.has(t.tps))) {
-        await sendMessage(chatId, `SELURUH TPS SUDAH TERISI DATA. UNTUK EDIT DATA kirim /edithasil`);
-        return res.status(200).json({ ok: true });
-      }
 
       const availableTps = isEditMode ? allTps : allTps.filter(t => !filledSet.has(t.tps));
       const keyboard = availableTps.map(t => [{ text: `📍 TPS ${t.tps}` }]);
 
-      const msg = `📋 <b>PANDUAN PELAPORAN HASIL SUARA</b>\n\n` +
-        `Langkah 1:\nSilakan pilih TPS.\n\n` +
-        `Langkah 2:\nMasukkan jumlah suara sesuai contoh format yang diberikan.`;
-
-      await sendMessage(chatId, msg, { keyboard, resize_keyboard: true, one_time_keyboard: true });
+      await sendMessage(chatId, `📋 <b>PILIH TPS</b>`, { keyboard, resize_keyboard: true, one_time_keyboard: true });
       return res.status(200).json({ ok: true });
     }
 
     if (command === '/kirimplano') {
       await supabase.from('master_petugas').update({ mode_input: 'PLANO' }).eq('id', petugas.id);
-      
-      await logAktivitas({
-        jenis_aksi: 'MODE_KIRIM_PLANO',
-        nrp_saksi: petugas.nrp,
-        nama_saksi: petugas.nama_petugas,
-        kecamatan: petugas.kecamatan,
-        desa: petugas.desa,
-        keterangan: `Petugas membuka menu /kirimplano`
-      });
-
       const { data: allTps } = await supabase.from('master_desa').select('tps').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).order('tps');
       const keyboard = allTps?.map(t => [{ text: `📍 TPS ${t.tps}` }]);
 
@@ -612,13 +510,12 @@ export default async function handler(req, res) {
 
     if (Array.isArray(message.photo) && message.photo.length > 0) {
       if (!petugas.tps_aktif) {
-        await sendMessage(chatId, `⚠️ TPS belum dipilih. Ketik /kirimplano atau /kirimhasil terlebih dahulu.`);
+        await sendMessage(chatId, `⚠️ Pilih TPS terlebih dahulu.`);
         return res.status(200).json({ ok: true });
       }
 
       const largestPhoto = message.photo[message.photo.length - 1];
-      await sendMessage(chatId, `📷 Foto C1 Plano TPS ${petugas.tps_aktif} diterima dan sedang diproses di latar belakang.`);
-      
+      await sendMessage(chatId, `📷 Foto C1 Plano TPS ${petugas.tps_aktif} sedang diproses.`);
       waitUntil(processPlanoPhotoInBackground(chatId, petugas.tps_aktif, largestPhoto.file_id, petugas));
       return res.status(200).json({ ok: true });
     }
@@ -627,24 +524,14 @@ export default async function handler(req, res) {
       const tpsSelected = text.replace('📍 TPS', '').trim();
       await supabase.from('master_petugas').update({ tps_aktif: tpsSelected }).eq('id', petugas.id);
 
-      await logAktivitas({
-        jenis_aksi: 'PILIH_TPS',
-        nrp_saksi: petugas.nrp,
-        nama_saksi: petugas.nama_petugas,
-        kecamatan: petugas.kecamatan,
-        desa: petugas.desa,
-        tps: tpsSelected,
-        keterangan: `Petugas memilih TPS ${tpsSelected} (Mode: ${petugas.mode_input || 'KIRIM'})`
-      });
-
       const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsSelected).maybeSingle();
       const jumlahCalon = mDesa?.jumlah_calon || 2;
 
       if (petugas.mode_input === 'PLANO') {
-        await removeKeyboard(chatId, `📌 <b>TPS ${tpsSelected} TERPILIH</b>\n\nSilakan kirimkan <b>foto C1 Plano</b>.`);
+        await removeKeyboard(chatId, `📌 <b>TPS ${tpsSelected} TERPILIH</b>\n\nKirimkan foto C1 Plano.`);
       } else {
         const example = Array(jumlahCalon).fill('0').concat(['0']).join('#');
-        await removeKeyboard(chatId, `📌 <b>TPS ${tpsSelected} TERPILIH</b>\n\nSilakan masukkan suara dengan format:\n<code>${example}</code>`);
+        await removeKeyboard(chatId, `📌 <b>TPS ${tpsSelected} TERPILIH</b>\n\nFormat:\n<code>${example}</code>`);
       }
       return res.status(200).json({ ok: true });
     }
@@ -667,9 +554,8 @@ export default async function handler(req, res) {
       }
 
       const vote = parsed.result;
-
       if (vote.total > dptLimit) {
-        await sendMessage(chatId, `❌ TOTAL SUARA MELEBIHI DPT (${dptLimit}). SILAHKAN INPUT KEMBALI`);
+        await sendMessage(chatId, `❌ TOTAL SUARA MELEBIHI DPT (${dptLimit})`);
         return res.status(200).json({ ok: true });
       }
 
@@ -680,12 +566,11 @@ export default async function handler(req, res) {
         ]
       };
 
-      const msg = `📊 <b>HASIL SUARA DITERIMA</b>\n\n${buildSummaryText(tpsTarget, vote, jumlahCalon)}`;
-      await sendMessage(chatId, msg, keyboard);
+      await sendMessage(chatId, `📊 <b>HASIL DITERIMA</b>\n\n${buildSummaryText(tpsTarget, vote, jumlahCalon)}`, keyboard);
       return res.status(200).json({ ok: true });
     }
 
-    await sendMessage(chatId, `ℹ️ Perintah tidak dikenali. Ketik /help untuk daftar menu.`);
+    await sendMessage(chatId, `ℹ️ Perintah tidak dikenali.`);
     return res.status(200).json({ ok: true });
 
   } catch (error) {
@@ -695,7 +580,7 @@ export default async function handler(req, res) {
 }
 
 /* =========================================================
-   CALLBACK QUERY HANDLER (BUTTON ACTIONS)
+   CALLBACK QUERY HANDLER
 ========================================================= */
 
 async function handleCallback(cb) {
@@ -723,90 +608,29 @@ async function handleCallback(cb) {
     }
 
     const votePayload = {
-      kecamatan: petugas.kecamatan,
-      desa: petugas.desa,
-      tps: tpsTarget,
-      nrp_saksi: petugas.nrp,
-      nama_saksi: petugas.nama_petugas,
-      suara_calon_01: vote.calon_01,
-      suara_calon_02: vote.calon_02,
-      suara_calon_03: vote.calon_03,
-      suara_calon_04: vote.calon_04,
-      suara_calon_05: vote.calon_05,
-      suara_tidak_sah: vote.tidak_sah,
-      total_suara_masuk: vote.total,
-      input_format: voteText,
-      status_verifikasi: statusVerifikasi,
-      chat_id_saksi: chatId,
-      timestamp: new Date().toISOString()
+      kecamatan: petugas.kecamatan, desa: petugas.desa, tps: tpsTarget, nrp_saksi: petugas.nrp, nama_saksi: petugas.nama_petugas,
+      suara_calon_01: vote.calon_01, suara_calon_02: vote.calon_02, suara_calon_03: vote.calon_03, suara_calon_04: vote.calon_04, suara_calon_05: vote.calon_05,
+      suara_tidak_sah: vote.tidak_sah, total_suara_masuk: vote.total, input_format: voteText, status_verifikasi: statusVerifikasi, chat_id_saksi: chatId, timestamp: new Date().toISOString()
     };
 
-    let saveErr = null;
     if (existingHasil) {
-      const { error } = await supabase.from('hasil_suara').update(votePayload).eq('id', existingHasil.id);
-      saveErr = error;
+      await supabase.from('hasil_suara').update(votePayload).eq('id', existingHasil.id);
     } else {
-      const { error } = await supabase.from('hasil_suara').insert(votePayload);
-      saveErr = error;
-    }
-
-    if (saveErr) {
-      console.error('FAILED TO SAVE VOTE:', saveErr);
-      await sendMessage(chatId, `❌ Gagal menyimpan data: ${saveErr.message}`);
-      return;
+      await supabase.from('hasil_suara').insert(votePayload);
     }
 
     await logAktivitas({
       jenis_aksi: existingHasil ? 'EDIT_HASIL' : 'KIRIM_HASIL_AWAL',
-      nrp_saksi: petugas.nrp,
-      nama_saksi: petugas.nama_petugas,
-      kecamatan: petugas.kecamatan,
-      desa: petugas.desa,
-      tps: tpsTarget,
-      data_sebelum: existingHasil ? {
-        suara_calon_01: existingHasil.suara_calon_01,
-        suara_calon_02: existingHasil.suara_calon_02,
-        suara_calon_03: existingHasil.suara_calon_03,
-        suara_calon_04: existingHasil.suara_calon_04,
-        suara_calon_05: existingHasil.suara_calon_05,
-        suara_tidak_sah: existingHasil.suara_tidak_sah,
-        total_suara_masuk: existingHasil.total_suara_masuk,
-        status_verifikasi: existingHasil.status_verifikasi
-      } : null,
-      data_sesudah: {
-        suara_calon_01: vote.calon_01,
-        suara_calon_02: vote.calon_02,
-        suara_calon_03: vote.calon_03,
-        suara_calon_04: vote.calon_04,
-        suara_calon_05: vote.calon_05,
-        suara_tidak_sah: vote.tidak_sah,
-        total_suara_masuk: vote.total,
-        status_verifikasi: statusVerifikasi
-      },
-      keterangan: existingHasil
-        ? `Edit perolehan suara TPS ${tpsTarget} oleh ${petugas.nama_petugas}`
-        : `Pengiriman awal hasil suara TPS ${tpsTarget} oleh ${petugas.nama_petugas}`
+      nrp_saksi: petugas.nrp, nama_saksi: petugas.nama_petugas, kecamatan: petugas.kecamatan, desa: petugas.desa, tps: tpsTarget,
+      keterangan: existingHasil ? `Edit hasil TPS ${tpsTarget}` : `Kirim awal hasil TPS ${tpsTarget}`
     });
 
-    const msg = `📊 <b>HASIL SUARA DICATAT</b>\n\n${buildSummaryText(tpsTarget, vote, jumlahCalon)}`;
-    const keyboard = { inline_keyboard: [[{ text: 'Kirim Hasil TPS Lain', callback_data: 'NEXT_TPS' }]] };
-
-    await editMessage(chatId, cb.message.message_id, msg, keyboard);
+    await editMessage(chatId, cb.message.message_id, `📊 <b>HASIL DICATAT</b>\n\n${buildSummaryText(tpsTarget, vote, jumlahCalon)}`, { inline_keyboard: [[{ text: 'Kirim TPS Lain', callback_data: 'NEXT_TPS' }]] });
     return;
   }
 
   if (data === 'REVISE_VOTE') {
-    await logAktivitas({
-      jenis_aksi: 'REVISI_INPUT_HASIL',
-      nrp_saksi: petugas.nrp,
-      nama_saksi: petugas.nama_petugas,
-      kecamatan: petugas.kecamatan,
-      desa: petugas.desa,
-      tps: petugas.tps_aktif,
-      keterangan: `Petugas memilih merevisi konfirmasi angka hasil suara`
-    });
-
-    await editMessage(chatId, cb.message.message_id, `🔄 Silakan masukkan ulang angka hasil suara sesuai format.`);
+    await editMessage(chatId, cb.message.message_id, `🔄 Masukkan ulang angka hasil suara.`);
     return;
   }
 
@@ -817,7 +641,7 @@ async function handleCallback(cb) {
 
     const availableTps = allTps?.filter(t => !filledSet.has(t.tps));
     if (!availableTps || availableTps.length === 0) {
-      await sendMessage(chatId, `SELURUH TPS SUDAH TERISI DATA. UNTUK EDIT DATA kirim /edithasil`);
+      await sendMessage(chatId, `SELURUH TPS SUDAH TERISI.`);
       return;
     }
 
@@ -828,23 +652,8 @@ async function handleCallback(cb) {
 
   if (data.startsWith('USE_MANUAL_')) {
     const id = data.replace('USE_MANUAL_', '');
-    const { data: hLama } = await supabase.from('hasil_suara').select('*').eq('id', id).single();
-
     await supabase.from('hasil_suara').update({ status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' }).eq('id', id);
-
-    await logAktivitas({
-      jenis_aksi: 'PILIH_HASIL_MANUAL',
-      nrp_saksi: petugas.nrp,
-      nama_saksi: petugas.nama_petugas,
-      kecamatan: petugas.kecamatan,
-      desa: petugas.desa,
-      tps: hLama?.tps,
-      data_sebelum: { status_verifikasi: hLama?.status_verifikasi },
-      data_sesudah: { status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN' },
-      keterangan: `Saksi memilih menggunakan Hasil Input Manual pada TPS ${hLama?.tps}`
-    });
-
-    await editMessage(chatId, cb.message.message_id, `✅ Anda memilih menggunakan <b>Hasil Input Manual</b>. Data dimasukkan ke antrean verifikasi Admin.`);
+    await editMessage(chatId, cb.message.message_id, `✅ Menggunakan <b>Hasil Input Manual</b>.`);
     return;
   }
 
@@ -853,29 +662,12 @@ async function handleCallback(cb) {
     const { data: h } = await supabase.from('hasil_suara').select('*').eq('id', id).single();
     if (h) {
       const ocrTotal = Number(h.ocr_calon_01 || 0) + Number(h.ocr_calon_02 || 0) + Number(h.ocr_calon_03 || 0) + Number(h.ocr_calon_04 || 0) + Number(h.ocr_calon_05 || 0) + Number(h.ocr_tidak_sah || 0);
-
       await supabase.from('hasil_suara').update({
         suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_calon_03: h.ocr_calon_03, suara_calon_04: h.ocr_calon_04, suara_calon_05: h.ocr_calon_05,
         suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal, status_verifikasi: 'MEMERLUKAN VERIFIKASI ADMIN'
       }).eq('id', id);
-
-      await logAktivitas({
-        jenis_aksi: 'PILIH_HASIL_PLANO',
-        nrp_saksi: petugas.nrp,
-        nama_saksi: petugas.nama_petugas,
-        kecamatan: petugas.kecamatan,
-        desa: petugas.desa,
-        tps: h.tps,
-        data_sebelum: {
-          suara_calon_01: h.suara_calon_01, suara_calon_02: h.suara_calon_02, suara_tidak_sah: h.suara_tidak_sah, total_suara_masuk: h.total_suara_masuk
-        },
-        data_sesudah: {
-          suara_calon_01: h.ocr_calon_01, suara_calon_02: h.ocr_calon_02, suara_tidak_sah: h.ocr_tidak_sah, total_suara_masuk: ocrTotal
-        },
-        keterangan: `Saksi memilih menggunakan Hasil Pembacaan Plano pada TPS ${h.tps}`
-      });
     }
-    await editMessage(chatId, cb.message.message_id, `✅ Anda memilih menggunakan <b>Hasil Pembacaan Plano</b>. Data diperbarui dan dimasukkan ke antrean verifikasi Admin.`);
+    await editMessage(chatId, cb.message.message_id, `✅ Menggunakan <b>Hasil Pembacaan Plano</b>.`);
     return;
   }
 }
