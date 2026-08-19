@@ -6,11 +6,14 @@ const supabase = createClient(
 );
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 
-/**
- * Escape karakter HTML agar nama/data dari database
- * tidak merusak parse_mode HTML Telegram.
- */
+const MAX_CALON = 5;
+
+/* =========================================================
+   UTILITAS
+========================================================= */
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -20,61 +23,66 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-/**
- * Kirim pesan ke Telegram menggunakan fetch.
- * Tidak lagi menggunakan https.request / Agent.
- */
-async function sendMessage(chatId, text, replyMarkup = null) {
+function commandOf(text) {
+  return String(text || '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)[0];
+}
+
+async function telegramApi(method, payload = {}) {
   if (!BOT_TOKEN) {
-    console.error('ERROR: BOT_TOKEN tidak ditemukan di Environment Variables Vercel.');
-    return null;
+    throw new Error('BOT_TOKEN belum tersedia.');
   }
 
-  try {
-    const body = {
-      chat_id: chatId,
-      text: text,
-      parse_mode: 'HTML'
-    };
-
-    if (replyMarkup) {
-      body.reply_markup = replyMarkup;
+  const response = await fetch(
+    `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     }
+  );
 
-    console.log('Mengirim pesan Telegram ke chat:', chatId);
+  const result = await response.json();
 
-    const response = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      }
-    );
-
-    const result = await response.json();
-
-    console.log(
-      'Response Telegram:',
+  if (!response.ok || !result.ok) {
+    console.error(
+      `Telegram API ERROR ${method}:`,
       JSON.stringify(result)
     );
 
-    if (!response.ok || !result.ok) {
-      console.error(
-        'TELEGRAM SEND ERROR:',
-        JSON.stringify(result)
-      );
+    throw new Error(
+      result?.description ||
+      `Telegram API ${method} gagal.`
+    );
+  }
 
-      return null;
-    }
+  return result;
+}
 
-    return result;
+async function sendMessage(
+  chatId,
+  text,
+  replyMarkup = null
+) {
+  const payload = {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML'
+  };
 
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
+
+  try {
+    return await telegramApi('sendMessage', payload);
   } catch (error) {
     console.error(
-      'FETCH TELEGRAM ERROR:',
+      'SEND MESSAGE ERROR:',
       error?.message || error
     );
 
@@ -82,77 +90,1609 @@ async function sendMessage(chatId, text, replyMarkup = null) {
   }
 }
 
-/**
- * Menghapus keyboard Telegram.
- */
-async function removeKeyboard(chatId, text) {
-  return await sendMessage(chatId, text, {
-    remove_keyboard: true
-  });
+async function answerCallbackQuery(
+  callbackQueryId,
+  text = ''
+) {
+  try {
+    return await telegramApi(
+      'answerCallbackQuery',
+      {
+        callback_query_id: callbackQueryId,
+        text,
+        show_alert: false
+      }
+    );
+  } catch (error) {
+    console.error(
+      'ANSWER CALLBACK ERROR:',
+      error?.message || error
+    );
+
+    return null;
+  }
 }
 
-/**
- * Handler utama Vercel.
- */
-export default async function handler(req, res) {
+async function editMessage(
+  chatId,
+  messageId,
+  text,
+  replyMarkup = null
+) {
+  const payload = {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: 'HTML'
+  };
 
-  console.log('========================================');
-  console.log('TELEGRAM WEBHOOK MASUK');
-  console.log('METHOD:', req.method);
-  console.log('========================================');
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
 
-  // Telegram webhook menggunakan POST
-  if (req.method !== 'POST') {
-    return res.status(200).send('OK');
+  try {
+    return await telegramApi(
+      'editMessageText',
+      payload
+    );
+  } catch (error) {
+    console.error(
+      'EDIT MESSAGE ERROR:',
+      error?.message || error
+    );
+
+    return null;
+  }
+}
+
+async function removeKeyboard(chatId, text) {
+  return sendMessage(
+    chatId,
+    text,
+    {
+      remove_keyboard: true
+    }
+  );
+}
+
+
+/* =========================================================
+   TELEGRAM PHOTO
+========================================================= */
+
+async function getTelegramFile(fileId) {
+
+  const result = await telegramApi(
+    'getFile',
+    {
+      file_id: fileId
+    }
+  );
+
+  return result.result;
+}
+
+async function downloadTelegramFile(filePath) {
+
+  const response = await fetch(
+    `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Gagal mengambil file Telegram. HTTP ${response.status}`
+    );
+  }
+
+  const arrayBuffer =
+    await response.arrayBuffer();
+
+  return Buffer.from(arrayBuffer);
+}
+
+
+/* =========================================================
+   GOOGLE VISION OCR
+========================================================= */
+
+async function runOCR(imageBuffer) {
+
+  if (!GOOGLE_VISION_API_KEY) {
+    throw new Error(
+      'GOOGLE_VISION_API_KEY belum disetting di Vercel.'
+    );
+  }
+
+  const base64Image =
+    imageBuffer.toString('base64');
+
+  const response = await fetch(
+    `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        requests: [
+          {
+            image: {
+              content: base64Image
+            },
+
+            features: [
+              {
+                type: 'DOCUMENT_TEXT_DETECTION'
+              }
+            ],
+
+            imageContext: {
+              languageHints: ['id']
+            }
+          }
+        ]
+      })
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error?.message ||
+      'Google Vision gagal.'
+    );
+  }
+
+  const responseData =
+    result?.responses?.[0];
+
+  const text =
+    responseData?.fullTextAnnotation?.text ||
+    '';
+
+  return {
+    text,
+    raw: result
+  };
+}
+
+
+/* =========================================================
+   PARSER OCR KONSERVATIF
+========================================================= */
+
+/*
+  Karena format C1 Plano belum final, kita TIDAK boleh
+  menebak angka berdasarkan posisi.
+
+  Parser sementara hanya menerima angka yang jelas
+  mempunyai label CALON / CANDIDATE.
+
+  Contoh yang dikenali:
+
+  CALON 01 120
+  CALON 02 75
+  CALON 03 5
+
+  atau:
+
+  CALON 01 : 120
+  CALON 02 : 75
+
+  Tidak Sah dicoba dikenali dari label.
+
+  Jika struktur tidak cukup jelas -> WAITING_ADMIN.
+*/
+
+function extractLabeledNumber(
+  text,
+  patterns
+) {
+
+  for (const pattern of patterns) {
+
+    const match =
+      text.match(pattern);
+
+    if (match && match[1] !== undefined) {
+
+      const number =
+        parseInt(
+          String(match[1]).replace(/[^\d]/g, ''),
+          10
+        );
+
+      if (Number.isInteger(number)) {
+        return number;
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseOCRVotes(
+  ocrText,
+  jumlahCalon
+) {
+
+  const normalized =
+    String(ocrText || '')
+      .replace(/\r/g, '')
+      .replace(/[ \t]+/g, ' ')
+      .toUpperCase();
+
+  const result = {
+    calon_01: null,
+    calon_02: null,
+    calon_03: null,
+    calon_04: null,
+    calon_05: null,
+    tidak_sah: null
+  };
+
+  for (let i = 1; i <= jumlahCalon; i++) {
+
+    const number =
+      String(i).padStart(2, '0');
+
+    const patterns = [
+
+      new RegExp(
+        `CALON\\s*${number}\\D{0,15}(\\d{1,5})`,
+        'i'
+      ),
+
+      new RegExp(
+        `CALON\\s*${i}\\D{0,15}(\\d{1,5})`,
+        'i'
+      ),
+
+      new RegExp(
+        `C\\s*${number}\\D{0,15}(\\d{1,5})`,
+        'i'
+      ),
+
+      new RegExp(
+        `C\\s*${i}\\D{0,15}(\\d{1,5})`,
+        'i'
+      )
+    ];
+
+    const value =
+      extractLabeledNumber(
+        normalized,
+        patterns
+      );
+
+    result[`calon_${number}`] =
+      value;
+  }
+
+  result.tidak_sah =
+    extractLabeledNumber(
+      normalized,
+      [
+        /SUARA\s+TIDAK\s+SAH\D{0,15}(\d{1,5})/i,
+        /TIDAK\s+SAH\D{0,15}(\d{1,5})/i,
+        /TIDAKSAH\D{0,15}(\d{1,5})/i
+      ]
+    );
+
+  let found = 0;
+
+  for (let i = 1; i <= jumlahCalon; i++) {
+    const key =
+      `calon_${String(i).padStart(2, '0')}`;
+
+    if (
+      result[key] !== null &&
+      Number.isInteger(result[key])
+    ) {
+      found++;
+    }
+  }
+
+  const allCandidatesFound =
+    found === jumlahCalon;
+
+  const tidakSahFound =
+    result.tidak_sah !== null;
+
+  /*
+    Confidence sementara.
+
+    Ini BUKAN confidence Google Vision.
+    Ini confidence parser kita.
+  */
+
+  let confidence = 0;
+
+  if (allCandidatesFound) {
+    confidence += 70;
+  }
+
+  if (tidakSahFound) {
+    confidence += 20;
+  }
+
+  if (
+    normalized.includes('JUMLAH') ||
+    normalized.includes('TOTAL')
+  ) {
+    confidence += 10;
+  }
+
+  return {
+    ...result,
+    confidence,
+    complete:
+      allCandidatesFound &&
+      tidakSahFound
+  };
+}
+
+
+/* =========================================================
+   PEMBANDINGAN
+========================================================= */
+
+function compareVotes(
+  input,
+  ocr,
+  jumlahCalon
+) {
+
+  const differences = [];
+
+  for (let i = 1; i <= jumlahCalon; i++) {
+
+    const number =
+      String(i).padStart(2, '0');
+
+    const key =
+      `calon_${number}`;
+
+    const inputValue =
+      Number(input[key] || 0);
+
+    const ocrValue =
+      Number(ocr[key] ?? -1);
+
+    if (inputValue !== ocrValue) {
+
+      differences.push({
+        label: `Calon ${number}`,
+        input: inputValue,
+        ocr: ocrValue
+      });
+    }
+  }
+
+  const inputTidakSah =
+    Number(input.tidak_sah || 0);
+
+  const ocrTidakSah =
+    Number(ocr.tidak_sah ?? -1);
+
+  if (
+    inputTidakSah !== ocrTidakSah
+  ) {
+
+    differences.push({
+      label: 'Tidak Sah',
+      input: inputTidakSah,
+      ocr: ocrTidakSah
+    });
+  }
+
+  return {
+    matched:
+      differences.length === 0,
+
+    differences
+  };
+}
+
+
+/* =========================================================
+   INPUT SUARA
+========================================================= */
+
+function parseVoteInput(
+  text,
+  jumlahCalon
+) {
+
+  const parts =
+    String(text)
+      .split('#')
+      .map(
+        value => value.trim()
+      );
+
+  /*
+    Jumlah elemen harus:
+    jumlah calon + 1 tidak sah
+  */
+
+  const expected =
+    jumlahCalon + 1;
+
+  if (parts.length !== expected) {
+
+    return {
+      error:
+        `Format membutuhkan ${expected} angka ` +
+        `karena terdapat ${jumlahCalon} calon ` +
+        `+ suara tidak sah.`
+    };
+  }
+
+  const invalid =
+    parts.some(
+      value =>
+        value === '' ||
+        !/^\d+$/.test(value)
+    );
+
+  if (invalid) {
+
+    return {
+      error:
+        'Semua nilai harus berupa angka positif.'
+    };
+  }
+
+  const values =
+    parts.map(
+      value => parseInt(value, 10)
+    );
+
+  const result = {
+    calon_01: 0,
+    calon_02: 0,
+    calon_03: 0,
+    calon_04: 0,
+    calon_05: 0,
+    tidak_sah:
+      values[values.length - 1]
+  };
+
+  for (let i = 0; i < jumlahCalon; i++) {
+
+    const key =
+      `calon_${String(i + 1).padStart(2, '0')}`;
+
+    result[key] =
+      values[i];
+  }
+
+  result.total =
+    values.reduce(
+      (sum, value) => sum + value,
+      0
+    );
+
+  return {
+    error: null,
+    result
+  };
+}
+
+
+/* =========================================================
+   FORMAT DATA
+========================================================= */
+
+function buildVoteInputFromRow(row) {
+
+  return {
+    calon_01:
+      Number(row.suara_calon_01 || 0),
+
+    calon_02:
+      Number(row.suara_calon_02 || 0),
+
+    calon_03:
+      Number(row.suara_calon_03 || 0),
+
+    calon_04:
+      Number(row.suara_calon_04 || 0),
+
+    calon_05:
+      Number(row.suara_calon_05 || 0),
+
+    tidak_sah:
+      Number(row.suara_tidak_sah || 0)
+  };
+}
+
+
+/* =========================================================
+   CARI DATA PENDING BERDASARKAN CHAT
+========================================================= */
+
+async function findPendingReport(
+  chatId
+) {
+
+  const { data, error } =
+    await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('chat_id_saksi', chatId)
+      .in(
+        'status_verifikasi',
+        [
+          'WAITING_C1',
+          'OCR_PROCESSING',
+          'WAITING_USER_CONFIRMATION',
+          'WAITING_ADMIN'
+        ]
+      )
+      .order(
+        'timestamp',
+        {
+          ascending: false
+        }
+      )
+      .limit(1)
+      .maybeSingle();
+
+  if (error) {
+
+    console.error(
+      'ERROR FIND PENDING:',
+      error
+    );
+
+    return null;
+  }
+
+  return data;
+}
+
+
+/* =========================================================
+   TAMPILKAN RINCIAN
+========================================================= */
+
+function buildVoteSummary(
+  row,
+  jumlahCalon
+) {
+
+  let text = '';
+
+  for (let i = 1; i <= jumlahCalon; i++) {
+
+    const key =
+      `suara_calon_${String(i).padStart(2, '0')}`;
+
+    text +=
+      `• Calon ${String(i).padStart(2, '0')}: ` +
+      `<b>${Number(row[key] || 0)}</b>\n`;
+  }
+
+  text +=
+    `• Tidak Sah: ` +
+    `<b>${Number(row.suara_tidak_sah || 0)}</b>\n`;
+
+  text +=
+    `-------------------------\n` +
+    `• <b>Total Suara Masuk: ` +
+    `${Number(row.total_suara_masuk || 0)}</b>`;
+
+  return text;
+}
+
+
+/* =========================================================
+   HANDLER FOTO C1
+========================================================= */
+
+async function handlePhoto(
+  message,
+  petugasLogin
+) {
+
+  const chatId =
+    String(message.chat.id);
+
+  console.log(
+    'FOTO TELEGRAM DITERIMA:',
+    chatId
+  );
+
+  const pending =
+    await findPendingReport(chatId);
+
+  if (!pending) {
+
+    await sendMessage(
+      chatId,
+
+      `⚠️ <b>BELUM ADA DATA SUARA</b>\n\n` +
+
+      `Silakan kirim angka hasil suara terlebih dahulu.\n\n` +
+
+      `Contoh:\n` +
+      `<code>120#75#5</code>\n\n` +
+
+      `Setelah itu baru kirim foto C1 Plano.`
+    );
+
+    return;
+  }
+
+  /*
+    Telegram mengirim beberapa ukuran foto.
+    Kita pilih foto dengan ukuran terbesar.
+  */
+
+  const photos =
+    Array.isArray(message.photo)
+      ? message.photo
+      : [];
+
+  if (photos.length === 0) {
+
+    await sendMessage(
+      chatId,
+      `❌ Foto tidak dapat dibaca oleh sistem.`
+    );
+
+    return;
+  }
+
+  const largestPhoto =
+    photos[photos.length - 1];
+
+  const fileId =
+    largestPhoto.file_id;
+
+  const fileUniqueId =
+    largestPhoto.file_unique_id;
+
+  /*
+    Tandai OCR sedang diproses.
+  */
+
+  await supabase
+    .from('hasil_suara')
+    .update({
+      status_verifikasi: 'OCR_PROCESSING',
+      telegram_photo_file_id: fileId,
+      telegram_photo_file_unique_id:
+        fileUniqueId,
+      ocr_processed_at: null
+    })
+    .eq('id', pending.id);
+
+  await sendMessage(
+    chatId,
+
+    `📷 <b>FOTO C1 DITERIMA</b>\n\n` +
+    `Foto sedang diperiksa oleh sistem.\n` +
+    `Mohon tunggu...`
+  );
+
+  try {
+
+    /*
+      Ambil file dari Telegram.
+    */
+
+    const telegramFile =
+      await getTelegramFile(fileId);
+
+    if (!telegramFile?.file_path) {
+      throw new Error(
+        'Telegram tidak memberikan file_path.'
+      );
+    }
+
+    const imageBuffer =
+      await downloadTelegramFile(
+        telegramFile.file_path
+      );
+
+    console.log(
+      'UKURAN FOTO:',
+      imageBuffer.length
+    );
+
+    /*
+      OCR.
+    */
+
+    const ocr =
+      await runOCR(imageBuffer);
+
+    const ocrText =
+      ocr.text || '';
+
+    /*
+      Ambil jumlah calon dari master_desa.
+    */
+
+    const { data: masterDesa } =
+      await supabase
+        .from('master_desa')
+        .select('jumlah_calon')
+        .eq(
+          'kecamatan',
+          pending.kecamatan
+        )
+        .eq(
+          'desa',
+          pending.desa
+        )
+        .eq(
+          'tps',
+          pending.tps
+        )
+        .maybeSingle();
+
+    const jumlahCalon =
+      Math.min(
+        Math.max(
+          Number(
+            masterDesa?.jumlah_calon || 2
+          ),
+          1
+        ),
+        MAX_CALON
+      );
+
+    /*
+      Parse OCR.
+    */
+
+    const parsed =
+      parseOCRVotes(
+        ocrText,
+        jumlahCalon
+      );
+
+    console.log(
+      'OCR PARSED:',
+      JSON.stringify(parsed)
+    );
+
+    /*
+      Simpan hasil OCR terlebih dahulu.
+    */
+
+    const ocrUpdate = {
+
+      ocr_text:
+        ocrText,
+
+      ocr_calon_01:
+        parsed.calon_01,
+
+      ocr_calon_02:
+        parsed.calon_02,
+
+      ocr_calon_03:
+        parsed.calon_03,
+
+      ocr_calon_04:
+        parsed.calon_04,
+
+      ocr_calon_05:
+        parsed.calon_05,
+
+      ocr_tidak_sah:
+        parsed.tidak_sah,
+
+      ocr_confidence:
+        parsed.confidence,
+
+      ocr_processed_at:
+        new Date().toISOString()
+    };
+
+    /*
+      OCR belum cukup jelas.
+    */
+
+    if (!parsed.complete) {
+
+      await supabase
+        .from('hasil_suara')
+        .update({
+          ...ocrUpdate,
+          status_verifikasi:
+            'WAITING_ADMIN'
+        })
+        .eq(
+          'id',
+          pending.id
+        );
+
+      await sendMessage(
+        chatId,
+
+        `⚠️ <b>OCR MEMERLUKAN VERIFIKASI ADMIN</b>\n\n` +
+
+        `Foto C1 berhasil diterima, tetapi sistem ` +
+        `belum dapat membaca seluruh angka dengan tingkat ` +
+        `keyakinan yang cukup.\n\n` +
+
+        `Data tidak ditampilkan sebagai hasil livecount ` +
+        `sampai Admin melakukan verifikasi.\n\n` +
+
+        `📍 TPS: <b>${escapeHtml(pending.tps)}</b>`
+      );
+
+      return;
+    }
+
+    /*
+      Bandingkan dengan input petugas.
+    */
+
+    const input =
+      buildVoteInputFromRow(
+        pending
+      );
+
+    const comparison =
+      compareVotes(
+        input,
+        parsed,
+        jumlahCalon
+      );
+
+    /*
+      OCR cocok.
+    */
+
+    if (
+      comparison.matched &&
+      parsed.confidence >= 90
+    ) {
+
+      await supabase
+        .from('hasil_suara')
+        .update({
+          ...ocrUpdate,
+          status_verifikasi:
+            'AUTO_VERIFIED',
+          verified_by:
+            'BOT_OCR',
+          verified_at:
+            new Date().toISOString(),
+          user_confirmation:
+            'AUTO_MATCH'
+        })
+        .eq(
+          'id',
+          pending.id
+        );
+
+      await sendMessage(
+        chatId,
+
+        `✅ <b>VERIFIKASI OTOMATIS BERHASIL</b>\n\n` +
+
+        `Foto C1 berhasil dibaca dan hasilnya ` +
+        `sesuai dengan angka yang Anda kirim.\n\n` +
+
+        `📍 TPS: <b>${escapeHtml(pending.tps)}</b>\n\n` +
+
+        buildVoteSummary(
+          pending,
+          jumlahCalon
+        ) +
+
+        `\n\n🟢 Status: <b>AUTO VERIFIED</b>\n` +
+        `Data telah masuk ke sistem livecount.`
+      );
+
+      return;
+    }
+
+    /*
+      OCR berbeda.
+    */
+
+    await supabase
+      .from('hasil_suara')
+      .update({
+        ...ocrUpdate,
+        status_verifikasi:
+          'WAITING_USER_CONFIRMATION'
+      })
+      .eq(
+        'id',
+        pending.id
+      );
+
+    let differenceText = '';
+
+    for (
+      const diff of comparison.differences
+    ) {
+
+      differenceText +=
+        `• ${escapeHtml(diff.label)}: ` +
+        `Input <b>${diff.input}</b> ` +
+        `| C1 <b>${diff.ocr}</b>\n`;
+    }
+
+    const keyboard = {
+      inline_keyboard: [
+
+        [
+          {
+            text:
+              '✅ Gunakan Hasil C1',
+            callback_data:
+              `OCR_ACCEPT_${pending.id}`
+          }
+        ],
+
+        [
+          {
+            text:
+              '⚠️ Pertahankan Input → Admin',
+            callback_data:
+              `OCR_REJECT_${pending.id}`
+          }
+        ]
+
+      ]
+    };
+
+    await sendMessage(
+      chatId,
+
+      `⚠️ <b>PERBEDAAN DITEMUKAN</b>\n\n` +
+
+      `Sistem menemukan perbedaan antara angka ` +
+      `yang Anda kirim dengan hasil pembacaan C1.\n\n` +
+
+      `<b>PERBEDAAN:</b>\n` +
+      differenceText +
+
+      `\n<b>Input Anda</b>\n` +
+      buildVoteSummary(
+        pending,
+        jumlahCalon
+      ) +
+
+      `\n\nSilakan tentukan tindakan:`,
+      
+      keyboard
+    );
+
+  } catch (error) {
+
+    console.error(
+      'ERROR OCR FOTO:',
+      error?.stack ||
+      error?.message ||
+      error
+    );
+
+    await supabase
+      .from('hasil_suara')
+      .update({
+        status_verifikasi:
+          'WAITING_ADMIN',
+        catatan_verifikasi:
+          error?.message ||
+          'OCR gagal diproses.'
+      })
+      .eq(
+        'id',
+        pending.id
+      );
+
+    await sendMessage(
+      chatId,
+
+      `⚠️ <b>PEMERIKSAAN OTOMATIS GAGAL</b>\n\n` +
+
+      `Foto C1 berhasil diterima, tetapi sistem ` +
+      `tidak dapat menyelesaikan pemeriksaan otomatis.\n\n` +
+
+      `Data telah ditempatkan pada daftar ` +
+      `<b>VERIFIKASI ADMIN</b>.\n\n` +
+
+      `Data <b>belum</b> dihitung dalam livecount.`
+    );
+  }
+}
+
+
+/* =========================================================
+   CALLBACK KONFIRMASI USER
+========================================================= */
+
+async function handleCallbackQuery(
+  callbackQuery
+) {
+
+  const callbackId =
+    callbackQuery.id;
+
+  const data =
+    callbackQuery.data || '';
+
+  const message =
+    callbackQuery.message;
+
+  const chatId =
+    String(
+      message?.chat?.id || ''
+    );
+
+  const messageId =
+    message?.message_id;
+
+  await answerCallbackQuery(
+    callbackId
+  );
+
+  if (!chatId) {
+    return;
+  }
+
+  /*
+    USER MEMILIH HASIL C1
+  */
+
+  if (
+    data.startsWith('OCR_ACCEPT_')
+  ) {
+
+    const id =
+      data.replace(
+        'OCR_ACCEPT_',
+        ''
+      );
+
+    const {
+      data: hasil,
+      error
+    } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('id', id)
+      .eq('chat_id_saksi', chatId)
+      .maybeSingle();
+
+    if (
+      error ||
+      !hasil
+    ) {
+
+      await sendMessage(
+        chatId,
+        `❌ Data verifikasi tidak ditemukan.`
+      );
+
+      return;
+    }
+
+    if (
+      hasil.status_verifikasi !==
+      'WAITING_USER_CONFIRMATION'
+    ) {
+
+      await sendMessage(
+        chatId,
+
+        `ℹ️ Data ini sudah diproses sebelumnya.`
+      );
+
+      return;
+    }
+
+    /*
+      Gunakan hasil OCR sebagai hasil resmi.
+    */
+
+    const jumlahCalonResult =
+      await supabase
+        .from('master_desa')
+        .select('jumlah_calon')
+        .eq(
+          'kecamatan',
+          hasil.kecamatan
+        )
+        .eq(
+          'desa',
+          hasil.desa
+        )
+        .eq(
+          'tps',
+          hasil.tps
+        )
+        .maybeSingle();
+
+    const jumlahCalon =
+      Math.min(
+        Math.max(
+          Number(
+            jumlahCalonResult
+              ?.data
+              ?.jumlah_calon || 2
+          ),
+          1
+        ),
+        MAX_CALON
+      );
+
+    const ocr01 =
+      Number(
+        hasil.ocr_calon_01 || 0
+      );
+
+    const ocr02 =
+      Number(
+        hasil.ocr_calon_02 || 0
+      );
+
+    const ocr03 =
+      Number(
+        hasil.ocr_calon_03 || 0
+      );
+
+    const ocr04 =
+      Number(
+        hasil.ocr_calon_04 || 0
+      );
+
+    const ocr05 =
+      Number(
+        hasil.ocr_calon_05 || 0
+      );
+
+    const ocrTidakSah =
+      Number(
+        hasil.ocr_tidak_sah || 0
+      );
+
+    const total =
+      ocr01 +
+      ocr02 +
+      ocr03 +
+      ocr04 +
+      ocr05 +
+      ocrTidakSah;
+
+    const updateData = {
+
+      suara_calon_01: ocr01,
+      suara_calon_02: ocr02,
+      suara_calon_03:
+        jumlahCalon >= 3
+          ? ocr03
+          : 0,
+
+      suara_calon_04:
+        jumlahCalon >= 4
+          ? ocr04
+          : 0,
+
+      suara_calon_05:
+        jumlahCalon >= 5
+          ? ocr05
+          : 0,
+
+      suara_tidak_sah:
+        ocrTidakSah,
+
+      total_suara_masuk:
+        total,
+
+      status_verifikasi:
+        'AUTO_VERIFIED',
+
+      verified_by:
+        'USER_CONFIRMED_OCR',
+
+      user_confirmation:
+        'ACCEPT_OCR',
+
+      verified_at:
+        new Date().toISOString()
+    };
+
+    const {
+      error: updateError
+    } = await supabase
+      .from('hasil_suara')
+      .update(updateData)
+      .eq('id', id);
+
+    if (updateError) {
+
+      console.error(
+        'ERROR ACCEPT OCR:',
+        updateError
+      );
+
+      await sendMessage(
+        chatId,
+        `❌ Gagal menyimpan hasil konfirmasi.`
+      );
+
+      return;
+    }
+
+    if (messageId) {
+
+      await editMessage(
+        chatId,
+        messageId,
+
+        `✅ <b>HASIL C1 DIKONFIRMASI</b>\n\n` +
+
+        `Anda memilih menggunakan hasil pembacaan C1.\n\n` +
+
+        `📍 TPS: <b>${escapeHtml(hasil.tps)}</b>\n\n` +
+
+        `• Calon 01: <b>${ocr01}</b>\n` +
+        `• Calon 02: <b>${ocr02}</b>\n` +
+
+        (
+          jumlahCalon >= 3
+            ? `• Calon 03: <b>${ocr03}</b>\n`
+            : ''
+        ) +
+
+        (
+          jumlahCalon >= 4
+            ? `• Calon 04: <b>${ocr04}</b>\n`
+            : ''
+        ) +
+
+        (
+          jumlahCalon >= 5
+            ? `• Calon 05: <b>${ocr05}</b>\n`
+            : ''
+        ) +
+
+        `• Tidak Sah: <b>${ocrTidakSah}</b>\n` +
+        `-------------------------\n` +
+        `• Total: <b>${total}</b>\n\n` +
+
+        `🟢 <b>AUTO VERIFIED</b>\n` +
+        `Data telah masuk livecount.`
+      );
+
+    } else {
+
+      await sendMessage(
+        chatId,
+        `✅ Hasil C1 dikonfirmasi dan masuk livecount.`
+      );
+    }
+
+    return;
+  }
+
+
+  /*
+    USER MENOLAK HASIL OCR
+  */
+
+  if (
+    data.startsWith('OCR_REJECT_')
+  ) {
+
+    const id =
+      data.replace(
+        'OCR_REJECT_',
+        ''
+      );
+
+    const {
+      data: hasil,
+      error
+    } = await supabase
+      .from('hasil_suara')
+      .select('*')
+      .eq('id', id)
+      .eq('chat_id_saksi', chatId)
+      .maybeSingle();
+
+    if (
+      error ||
+      !hasil
+    ) {
+
+      await sendMessage(
+        chatId,
+        `❌ Data verifikasi tidak ditemukan.`
+      );
+
+      return;
+    }
+
+    if (
+      hasil.status_verifikasi !==
+      'WAITING_USER_CONFIRMATION'
+    ) {
+
+      await sendMessage(
+        chatId,
+        `ℹ️ Data ini sudah diproses sebelumnya.`
+      );
+
+      return;
+    }
+
+    const {
+      error: updateError
+    } = await supabase
+      .from('hasil_suara')
+      .update({
+        status_verifikasi:
+          'WAITING_ADMIN',
+
+        user_confirmation:
+          'REJECT_OCR',
+
+        catatan_verifikasi:
+          'Petugas mempertahankan input awal. Menunggu verifikasi Admin.'
+      })
+      .eq('id', id);
+
+    if (updateError) {
+
+      console.error(
+        'ERROR REJECT OCR:',
+        updateError
+      );
+
+      await sendMessage(
+        chatId,
+        `❌ Gagal meneruskan data ke Admin.`
+      );
+
+      return;
+    }
+
+    if (messageId) {
+
+      await editMessage(
+        chatId,
+        messageId,
+
+        `⚠️ <b>DITERUSKAN KE ADMIN</b>\n\n` +
+
+        `Anda memilih mempertahankan angka ` +
+        `input awal.\n\n` +
+
+        `Data sekarang menunggu pemeriksaan Admin ` +
+        `dan <b>belum dihitung dalam livecount</b>.`
+      );
+
+    } else {
+
+      await sendMessage(
+        chatId,
+
+        `⚠️ Data diteruskan ke Admin.\n` +
+        `Data belum dihitung dalam livecount.`
+      );
+    }
+
+    return;
+  }
+}
+
+
+/* =========================================================
+   HANDLER UTAMA
+========================================================= */
+
+export default async function handler(
+  req,
+  res
+) {
+
+  console.log(
+    '========================================'
+  );
+
+  console.log(
+    'TELEGRAM WEBHOOK'
+  );
+
+  console.log(
+    'METHOD:',
+    req.method
+  );
+
+  console.log(
+    '========================================'
+  );
+
+  if (
+    req.method !== 'POST'
+  ) {
+
+    return res
+      .status(200)
+      .send('OK');
   }
 
   try {
 
-    const update = req.body;
+    const update =
+      req.body;
 
     console.log(
-      'UPDATE TELEGRAM:',
-      JSON.stringify(update)
+      'UPDATE TYPE:',
+      Object.keys(update || {})
     );
 
-    // Pastikan update mempunyai message
-    if (!update || !update.message) {
-      console.log('Tidak ada update.message');
-      return res.status(200).json({ ok: true });
-    }
-
-    const message = update.message;
-
-    const chatId = String(message.chat?.id || '');
-
-    const text = message.text
-      ? String(message.text).trim()
-      : '';
-
-    console.log('CHAT ID:', chatId);
-    console.log('TEXT:', text);
-
-    if (!chatId) {
-      console.error('Chat ID tidak ditemukan.');
-      return res.status(200).json({ ok: true });
-    }
-
-    // =========================================================
-    // 1. COMMAND /START
-    // =========================================================
-
-    const commandStart = text
-      .toLowerCase()
-      .split(/\s+/)[0];
+    /*
+      ======================================================
+      CALLBACK QUERY
+      ======================================================
+    */
 
     if (
-      commandStart === '/start' ||
-      commandStart === '/start@hitungcepatpilkades_bot'
+      update?.callback_query
     ) {
 
-      console.log('COMMAND /START TERDETEKSI');
+      await handleCallbackQuery(
+        update.callback_query
+      );
 
-      const result = await sendMessage(
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
+    }
+
+
+    /*
+      ======================================================
+      MESSAGE
+      ======================================================
+    */
+
+    if (
+      !update?.message
+    ) {
+
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
+    }
+
+    const message =
+      update.message;
+
+    const chatId =
+      String(
+        message.chat?.id || ''
+      );
+
+    const text =
+      message.text
+        ? String(
+            message.text
+          ).trim()
+        : '';
+
+    if (!chatId) {
+
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
+    }
+
+    console.log(
+      'CHAT ID:',
+      chatId
+    );
+
+    console.log(
+      'TEXT:',
+      text
+    );
+
+    /*
+      ======================================================
+      FOTO HARUS DIPROSES SEBELUM DEFAULT RESPONSE
+      ======================================================
+    */
+
+    if (
+      Array.isArray(
+        message.photo
+      ) &&
+      message.photo.length > 0
+    ) {
+
+      const {
+        data: petugasFoto,
+        error: errorPetugasFoto
+      } = await supabase
+        .from('master_petugas')
+        .select('*')
+        .eq(
+          'chat_id_telegram',
+          chatId
+        )
+        .maybeSingle();
+
+      if (
+        errorPetugasFoto ||
+        !petugasFoto
+      ) {
+
+        await sendMessage(
+          chatId,
+
+          `🔐 <b>ANDA BELUM TERDAFTAR</b>\n\n` +
+          `Silakan registrasi terlebih dahulu dengan:\n` +
+          `<code>/reg NRP</code>`
+        );
+
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
+      }
+
+      await handlePhoto(
+        message,
+        petugasFoto
+      );
+
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
+    }
+
+
+    /*
+      ======================================================
+      COMMAND
+      ======================================================
+    */
+
+    const command =
+      commandOf(text);
+
+
+    /*
+      ======================================================
+      /START
+      ======================================================
+    */
+
+    if (
+      command === '/start' ||
+      command ===
+        '/start@hitungcepatpilkades_bot'
+    ) {
+
+      await sendMessage(
         chatId,
 
         `🇮🇩 <b>SELAMAT DATANG</b>\n\n` +
@@ -168,27 +1708,35 @@ export default async function handler(req, res) {
         `<code>/reg 89080060</code>`
       );
 
-      console.log(
-        'HASIL SEND /START:',
-        JSON.stringify(result)
-      );
-
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 2. COMMAND /BATAL
-    // =========================================================
+
+    /*
+      ======================================================
+      /BATAL
+      ======================================================
+    */
 
     if (
-      commandStart === '/batal' ||
-      commandStart === '/batal@hitungcepatpilkades_bot'
+      command === '/batal' ||
+      command ===
+        '/batal@hitungcepatpilkades_bot'
     ) {
 
-      const { data: petugasBatal } = await supabase
+      const {
+        data: petugasBatal
+      } = await supabase
         .from('master_petugas')
         .select('*')
-        .eq('chat_id_telegram', `WAIT_${chatId}`)
+        .eq(
+          'chat_id_telegram',
+          `WAIT_${chatId}`
+        )
         .maybeSingle();
 
       if (petugasBatal) {
@@ -196,37 +1744,51 @@ export default async function handler(req, res) {
         await supabase
           .from('master_petugas')
           .update({
-            chat_id_telegram: null
+            chat_id_telegram:
+              null
           })
-          .eq('nrp', petugasBatal.nrp);
-
+          .eq(
+            'nrp',
+            petugasBatal.nrp
+          );
       }
 
       await removeKeyboard(
         chatId,
+
         `✅ Proses dibatalkan.\n\n` +
         `Ketik <code>/start</code> untuk memulai kembali.`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 3. COMMAND /REG NRP
-    // =========================================================
+
+    /*
+      ======================================================
+      /REG
+      ======================================================
+    */
 
     if (
-      commandStart === '/reg' ||
-      commandStart === '/reg@hitungcepatpilkades_bot'
+      command === '/reg' ||
+      command ===
+        '/reg@hitungcepatpilkades_bot'
     ) {
 
-      console.log('COMMAND /REG TERDETEKSI');
+      const parts =
+        text
+          .trim()
+          .split(/\s+/);
 
-      const parts = text.trim().split(/\s+/);
-
-      const nrpInput = parts.length >= 2
-        ? parts[1].trim()
-        : '';
+      const nrpInput =
+        parts.length >= 2
+          ? parts[1].trim()
+          : '';
 
       if (!nrpInput) {
 
@@ -234,44 +1796,48 @@ export default async function handler(req, res) {
           chatId,
 
           `⚠️ <b>FORMAT SALAH</b>\n\n` +
-
-          `Gunakan format:\n` +
+          `Gunakan:\n` +
           `<code>/reg NRP</code>\n\n` +
-
           `Contoh:\n` +
           `<code>/reg 89080060</code>`
         );
 
-        return res.status(200).json({ ok: true });
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
       }
-
-      console.log('NRP INPUT:', nrpInput);
 
       const {
         data: petugas,
-        error: errSearch
+        error
       } = await supabase
         .from('master_petugas')
         .select('*')
-        .eq('nrp', nrpInput)
+        .eq(
+          'nrp',
+          nrpInput
+        )
         .maybeSingle();
 
-      if (errSearch) {
+      if (error) {
 
         console.error(
-          'SUPABASE ERROR SEARCH PETUGAS:',
-          errSearch
+          'ERROR SEARCH PETUGAS:',
+          error
         );
 
         await sendMessage(
           chatId,
-
-          `❌ <b>Terjadi kesalahan sistem.</b>\n\n` +
-          `Database tidak dapat diakses.\n` +
-          `Silakan coba beberapa saat lagi.`
+          `❌ Database tidak dapat diakses.`
         );
 
-        return res.status(200).json({ ok: true });
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
       }
 
       if (!petugas) {
@@ -280,128 +1846,91 @@ export default async function handler(req, res) {
           chatId,
 
           `❌ <b>NRP TIDAK TERDAFTAR</b>\n\n` +
-
           `NRP <code>${escapeHtml(nrpInput)}</code> ` +
-          `tidak ditemukan dalam database.\n\n` +
-
-          `Silakan hubungi Admin Panitia untuk ` +
-          `pendaftaran petugas lapangan.`
+          `tidak ditemukan.\n\n` +
+          `Silakan hubungi Admin Panitia.`
         );
 
-        return res.status(200).json({ ok: true });
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
       }
 
-      // Simpan status WAIT
-      const {
-        error: errWait
-      } = await supabase
+      await supabase
         .from('master_petugas')
         .update({
-          chat_id_telegram: `WAIT_${chatId}`
+          chat_id_telegram:
+            `WAIT_${chatId}`
         })
-        .eq('nrp', nrpInput);
-
-      if (errWait) {
-
-        console.error(
-          'SUPABASE ERROR UPDATE WAIT:',
-          errWait
+        .eq(
+          'nrp',
+          nrpInput
         );
-
-        await sendMessage(
-          chatId,
-          `❌ Gagal memulai proses registrasi.\n\n` +
-          `Silakan coba kembali.`
-        );
-
-        return res.status(200).json({ ok: true });
-      }
 
       await sendMessage(
         chatId,
 
         `✅ <b>NRP TERVERIFIKASI</b>\n\n` +
 
-        `Halo <b>${escapeHtml(petugas.nama_petugas)}</b>.\n\n` +
+        `Halo <b>${escapeHtml(
+          petugas.nama_petugas
+        )}</b>.\n\n` +
 
         `NRP Anda berhasil ditemukan dalam database.\n\n` +
 
         `Silakan masukkan <b>PIN Rahasia</b> Anda.\n\n` +
 
-        `Jika ingin membatalkan, ketik:\n` +
+        `Jika ingin membatalkan:\n` +
         `<code>/batal</code>`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 4. CEK PETUGAS YANG SEDANG MENUNGGU PIN
-    // =========================================================
+
+    /*
+      ======================================================
+      CEK PIN
+      ======================================================
+    */
 
     const {
-      data: petugasWait,
-      error: errWaitSearch
+      data: petugasWait
     } = await supabase
       .from('master_petugas')
       .select('*')
-      .eq('chat_id_telegram', `WAIT_${chatId}`)
+      .eq(
+        'chat_id_telegram',
+        `WAIT_${chatId}`
+      )
       .maybeSingle();
-
-    if (errWaitSearch) {
-
-      console.error(
-        'SUPABASE ERROR WAIT:',
-        errWaitSearch
-      );
-
-      await sendMessage(
-        chatId,
-        `❌ Terjadi kesalahan saat membaca data registrasi.`
-      );
-
-      return res.status(200).json({ ok: true });
-    }
 
     if (petugasWait) {
 
-      console.log(
-        'PETUGAS WAIT DITEMUKAN:',
-        petugasWait.nrp
-      );
-
-      // Cek PIN
       if (
         text !== '' &&
-        text === String(petugasWait.pin ?? '').trim()
+        text ===
+          String(
+            petugasWait.pin ?? ''
+          ).trim()
       ) {
 
-        console.log('PIN BENAR');
-
-        const {
-          error: errLogin
-        } = await supabase
+        await supabase
           .from('master_petugas')
           .update({
-            chat_id_telegram: chatId
+            chat_id_telegram:
+              chatId
           })
-          .eq('nrp', petugasWait.nrp);
-
-        if (errLogin) {
-
-          console.error(
-            'SUPABASE ERROR LOGIN:',
-            errLogin
+          .eq(
+            'nrp',
+            petugasWait.nrp
           );
-
-          await sendMessage(
-            chatId,
-            `❌ PIN benar, tetapi gagal menyelesaikan registrasi.\n\n` +
-            `Silakan coba kembali.`
-          );
-
-          return res.status(200).json({ ok: true });
-        }
 
         await removeKeyboard(
           chatId,
@@ -409,74 +1938,78 @@ export default async function handler(req, res) {
           `🎉 <b>REGISTRASI BERHASIL</b>\n\n` +
 
           `Selamat datang,\n` +
-          `<b>${escapeHtml(petugasWait.nama_petugas)}</b>\n\n` +
+          `<b>${escapeHtml(
+            petugasWait.nama_petugas
+          )}</b>\n\n` +
 
-          `📍 Kecamatan : ` +
-          `<b>${escapeHtml(petugasWait.kecamatan)}</b>\n` +
+          `📍 Kecamatan : <b>${escapeHtml(
+            petugasWait.kecamatan
+          )}</b>\n` +
 
-          `🏘 Desa : ` +
-          `<b>${escapeHtml(petugasWait.desa)}</b>\n\n` +
+          `🏘 Desa : <b>${escapeHtml(
+            petugasWait.desa
+          )}</b>\n\n` +
 
-          `Anda telah berhasil terdaftar sebagai petugas.\n\n` +
-
-          `Untuk melaporkan hasil penghitungan suara, ketik:\n` +
+          `Untuk melaporkan hasil penghitungan suara:\n` +
           `<code>/kirimhasil</code>`
         );
 
-        return res.status(200).json({ ok: true });
-
       } else {
-
-        console.log('PIN SALAH');
 
         await sendMessage(
           chatId,
 
           `❌ <b>PIN SALAH</b>\n\n` +
-
-          `PIN Rahasia yang Anda masukkan tidak sesuai.\n\n` +
-
-          `Silakan masukkan PIN yang benar.\n\n` +
-
+          `Silakan masukkan PIN Rahasia yang benar.\n\n` +
           `Jika ingin membatalkan:\n` +
           `<code>/batal</code>`
         );
-
-        return res.status(200).json({ ok: true });
       }
+
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 5. CEK PETUGAS YANG SUDAH LOGIN
-    // =========================================================
+
+    /*
+      ======================================================
+      CEK LOGIN
+      ======================================================
+    */
 
     const {
       data: petugasLogin,
-      error: errLoginSearch
+      error: loginError
     } = await supabase
       .from('master_petugas')
       .select('*')
-      .eq('chat_id_telegram', chatId)
+      .eq(
+        'chat_id_telegram',
+        chatId
+      )
       .maybeSingle();
 
-    if (errLoginSearch) {
+    if (loginError) {
 
       console.error(
-        'SUPABASE ERROR CEK LOGIN:',
-        errLoginSearch
+        'ERROR CEK LOGIN:',
+        loginError
       );
 
       await sendMessage(
         chatId,
-        `❌ Terjadi kesalahan saat memeriksa akun Anda.`
+        `❌ Terjadi kesalahan saat membaca akun Anda.`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
-
-    // =========================================================
-    // 6. JIKA BELUM TERDAFTAR
-    // =========================================================
 
     if (!petugasLogin) {
 
@@ -484,26 +2017,28 @@ export default async function handler(req, res) {
         chatId,
 
         `🔐 <b>ANDA BELUM TERDAFTAR</b>\n\n` +
-
-        `Silakan lakukan registrasi terlebih dahulu.\n\n` +
-
         `Ketik:\n` +
-        `<code>/reg NRP</code>\n\n` +
-
-        `Contoh:\n` +
-        `<code>/reg 89080060</code>`
+        `<code>/reg NRP</code>`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 7. COMMAND /STATUS
-    // =========================================================
+
+    /*
+      ======================================================
+      /STATUS
+      ======================================================
+    */
 
     if (
-      commandStart === '/status' ||
-      commandStart === '/status@hitungcepatpilkades_bot'
+      command === '/status' ||
+      command ===
+        '/status@hitungcepatpilkades_bot'
     ) {
 
       await sendMessage(
@@ -511,69 +2046,88 @@ export default async function handler(req, res) {
 
         `👤 <b>STATUS PETUGAS</b>\n\n` +
 
-        `Nama : <b>${escapeHtml(petugasLogin.nama_petugas)}</b>\n` +
-        `NRP : <code>${escapeHtml(petugasLogin.nrp)}</code>\n` +
-        `Kecamatan : <b>${escapeHtml(petugasLogin.kecamatan)}</b>\n` +
-        `Desa : <b>${escapeHtml(petugasLogin.desa)}</b>\n` +
-        `TPS Aktif : <b>${escapeHtml(petugasLogin.tps_aktif || '-')}</b>\n\n` +
+        `Nama : <b>${escapeHtml(
+          petugasLogin.nama_petugas
+        )}</b>\n` +
+
+        `NRP : <code>${escapeHtml(
+          petugasLogin.nrp
+        )}</code>\n` +
+
+        `Kecamatan : <b>${escapeHtml(
+          petugasLogin.kecamatan
+        )}</b>\n` +
+
+        `Desa : <b>${escapeHtml(
+          petugasLogin.desa
+        )}</b>\n` +
+
+        `TPS Aktif : <b>${escapeHtml(
+          petugasLogin.tps_aktif || '-'
+        )}</b>\n\n` +
 
         `Status : ✅ <b>TERDAFTAR</b>`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 8. COMMAND /KIRIMHASIL
-    // =========================================================
+
+    /*
+      ======================================================
+      /KIRIMHASIL
+      ======================================================
+    */
 
     if (
-      commandStart === '/kirimhasil' ||
-      commandStart === '/kirimhasil@hitungcepatpilkades_bot'
+      command === '/kirimhasil' ||
+      command ===
+        '/kirimhasil@hitungcepatpilkades_bot'
     ) {
 
-      console.log(
-        'COMMAND /KIRIMHASIL:',
-        petugasLogin.nrp
-      );
-
       const {
-        data: daftarTps,
-        error: errTps
+        data: daftarTps
       } = await supabase
         .from('master_desa')
         .select('tps')
-        .eq('kecamatan', petugasLogin.kecamatan)
-        .eq('desa', petugasLogin.desa);
+        .eq(
+          'kecamatan',
+          petugasLogin.kecamatan
+        )
+        .eq(
+          'desa',
+          petugasLogin.desa
+        )
+        .order('tps');
 
-      if (errTps) {
-
-        console.error(
-          'SUPABASE ERROR DAFTAR TPS:',
-          errTps
-        );
-      }
-
-      let keyboard = [];
-
-      if (daftarTps && daftarTps.length > 0) {
-
-        keyboard = daftarTps
-          .filter(item => item.tps)
-          .map(item => [
-            {
-              text: `📍 ${item.tps}`
-            }
-          ]);
-
-      } else {
-
-        // Fallback jika master_desa belum memiliki TPS
-        keyboard = [
-          [{ text: '📍 TPS 01' }],
-          [{ text: '📍 TPS 02' }]
-        ];
-      }
+      const keyboard =
+        daftarTps?.length
+          ? daftarTps.map(
+              item => [
+                {
+                  text:
+                    `📍 ${item.tps}`
+                }
+              ]
+            )
+          : [
+              [
+                {
+                  text:
+                    '📍 TPS 01'
+                }
+              ],
+              [
+                {
+                  text:
+                    '📍 TPS 02'
+                }
+              ]
+            ];
 
       await sendMessage(
         chatId,
@@ -581,197 +2135,184 @@ export default async function handler(req, res) {
         `📋 <b>PANDUAN PELAPORAN HASIL SUARA</b>\n\n` +
 
         `Langkah 1:\n` +
-        `Silakan pilih <b>TPS</b> tempat Anda bertugas ` +
-        `di bawah ini.\n\n` +
+        `Silakan pilih <b>TPS</b>.\n\n` +
 
         `Petugas:\n` +
-        `<b>${escapeHtml(petugasLogin.nama_petugas)}</b>\n` +
+        `<b>${escapeHtml(
+          petugasLogin.nama_petugas
+        )}</b>\n\n` +
 
         `Desa:\n` +
-        `<b>${escapeHtml(petugasLogin.desa)}</b>`,
+        `<b>${escapeHtml(
+          petugasLogin.desa
+        )}</b>`,
 
         {
-          keyboard: keyboard,
+          keyboard,
           resize_keyboard: true,
           one_time_keyboard: true
         }
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 9. PILIHAN TPS
-    // =========================================================
+
+    /*
+      ======================================================
+      PILIH TPS
+      ======================================================
+    */
 
     if (
       text.startsWith('📍') ||
       /^tps\s*\d+/i.test(text)
     ) {
 
-      const tpsSelected = text
-        .replace('📍', '')
-        .trim();
-
-      if (!tpsSelected) {
-
-        await sendMessage(
-          chatId,
-          `❌ TPS tidak valid. Silakan pilih TPS dari tombol yang tersedia.`
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      console.log(
-        'TPS DIPILIH:',
-        tpsSelected
-      );
+      const tpsSelected =
+        text
+          .replace('📍', '')
+          .trim();
 
       const {
-        error: errUpdateTps
+        data: masterDesa
       } = await supabase
-        .from('master_petugas')
-        .update({
-          tps_aktif: tpsSelected
-        })
-        .eq('chat_id_telegram', chatId);
+        .from('master_desa')
+        .select(
+          'tps,jumlah_calon'
+        )
+        .eq(
+          'kecamatan',
+          petugasLogin.kecamatan
+        )
+        .eq(
+          'desa',
+          petugasLogin.desa
+        )
+        .eq(
+          'tps',
+          tpsSelected
+        )
+        .maybeSingle();
 
-      if (errUpdateTps) {
-
-        console.error(
-          'SUPABASE ERROR UPDATE TPS:',
-          errUpdateTps
-        );
+      if (!masterDesa) {
 
         await sendMessage(
           chatId,
-          `❌ Gagal menyimpan pilihan TPS.\n\n` +
-          `Silakan coba kembali.`
+
+          `❌ <b>TPS TIDAK TERDAFTAR</b>\n\n` +
+          `TPS <b>${escapeHtml(
+            tpsSelected
+          )}</b> tidak ditemukan dalam master TPS.`
         );
 
-        return res.status(200).json({ ok: true });
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
       }
 
-      await sendMessage(
+      const jumlahCalon =
+        Math.min(
+          Math.max(
+            Number(
+              masterDesa.jumlah_calon || 2
+            ),
+            1
+          ),
+          MAX_CALON
+        );
+
+      await supabase
+        .from('master_petugas')
+        .update({
+          tps_aktif:
+            tpsSelected
+        })
+        .eq(
+          'chat_id_telegram',
+          chatId
+        );
+
+      const formatParts =
+        [];
+
+      for (
+        let i = 1;
+        i <= jumlahCalon;
+        i++
+      ) {
+
+        formatParts.push(
+          `Calon ${String(i).padStart(2, '0')}`
+        );
+      }
+
+      formatParts.push(
+        'Tidak Sah'
+      );
+
+      const format =
+        formatParts.join('#');
+
+      const example =
+        Array(jumlahCalon)
+          .fill('0')
+          .concat(['0'])
+          .join('#');
+
+      await removeKeyboard(
         chatId,
 
         `📌 <b>TPS TERPILIH</b>\n\n` +
 
-        `TPS : <b>${escapeHtml(tpsSelected)}</b>\n\n` +
+        `TPS : <b>${escapeHtml(
+          tpsSelected
+        )}</b>\n` +
+
+        `Jumlah Calon : <b>${jumlahCalon}</b>\n\n` +
 
         `Langkah 2:\n` +
-        `Kirimkan angka perolehan suara dengan format tanda pagar (#):\n\n` +
+        `Kirim angka dengan format:\n` +
 
-        `<code>[Calon 01]#[Calon 02]#[Calon 03]#[Tidak Sah]</code>\n\n` +
+        `<code>${escapeHtml(
+          format
+        )}</code>\n\n` +
 
-        `<i>Contoh:</i>\n` +
-        `<code>120#80#40#10</code>\n\n` +
+        `Contoh:\n` +
+        `<code>${example}</code>\n\n` +
 
-        `Jika ada 4 calon:\n` +
-        `<code>120#80#40#30#10</code>\n\n` +
+        `Angka terakhir adalah <b>suara tidak sah</b>.\n\n` +
 
-        `Jika ada 5 calon:\n` +
-        `<code>120#80#40#30#20#10</code>`
+        `Setelah angka diterima, bot akan meminta ` +
+        `Anda mengirim foto C1 Plano untuk pemeriksaan.`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 10. INPUT SUARA DENGAN #
-    // =========================================================
 
-    if (text.includes('#')) {
+    /*
+      ======================================================
+      INPUT SUARA
+      ======================================================
+    */
 
-      console.log(
-        'INPUT SUARA:',
-        text
-      );
-
-      const parts = text
-        .split('#')
-        .map(value => value.trim());
-
-      // Minimal:
-      // 1 calon + tidak sah
-      if (parts.length < 2) {
-
-        await sendMessage(
-          chatId,
-
-          `❌ <b>FORMAT SUARA SALAH</b>\n\n` +
-
-          `Gunakan format:\n` +
-          `<code>120#80#40#10</code>\n\n` +
-
-          `Angka terakhir adalah suara tidak sah.`
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      // Validasi angka
-      const invalid = parts.some(
-        value => value === '' || !/^\d+$/.test(value)
-      );
-
-      if (invalid) {
-
-        await sendMessage(
-          chatId,
-
-          `❌ <b>INPUT TIDAK VALID</b>\n\n` +
-
-          `Semua nilai harus berupa angka.\n\n` +
-
-          `Contoh benar:\n` +
-          `<code>120#80#40#10</code>`
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      const rawArray = parts.map(
-        value => parseInt(value, 10)
-      );
-
-      // Elemen terakhir = suara tidak sah
-      const suaraTidakSah = rawArray.pop() || 0;
-
-      const c01 = rawArray[0] || 0;
-      const c02 = rawArray[1] || 0;
-      const c03 = rawArray[2] || 0;
-      const c04 = rawArray[3] || 0;
-      const c05 = rawArray[4] || 0;
-
-      // Maksimal 5 calon
-      if (rawArray.length > 5) {
-
-        await sendMessage(
-          chatId,
-
-          `❌ <b>JUMLAH CALON TIDAK SESUAI</b>\n\n` +
-
-          `Sistem mendukung maksimal 5 calon.\n\n` +
-
-          `Format maksimal:\n` +
-          `<code>100#90#80#70#60#10</code>`
-        );
-
-        return res.status(200).json({ ok: true });
-      }
-
-      const totalSuara =
-        c01 +
-        c02 +
-        c03 +
-        c04 +
-        c05 +
-        suaraTidakSah;
+    if (
+      text.includes('#')
+    ) {
 
       const tpsTarget =
-        petugasLogin.tps_aktif || '';
+        petugasLogin.tps_aktif;
 
       if (!tpsTarget) {
 
@@ -779,192 +2320,328 @@ export default async function handler(req, res) {
           chatId,
 
           `⚠️ <b>TPS BELUM DIPILIH</b>\n\n` +
-
-          `Silakan ketik:\n` +
-          `<code>/kirimhasil</code>\n\n` +
-
-          `kemudian pilih TPS terlebih dahulu.`
+          `Ketik <code>/kirimhasil</code> terlebih dahulu.`
         );
 
-        return res.status(200).json({ ok: true });
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
       }
 
-      console.log(
-        'DATA SUARA:',
-        JSON.stringify({
-          kecamatan: petugasLogin.kecamatan,
-          desa: petugasLogin.desa,
-          tps: tpsTarget,
-          nrp: petugasLogin.nrp,
-          c01,
-          c02,
-          c03,
-          c04,
-          c05,
-          suaraTidakSah,
-          totalSuara
-        })
-      );
+      /*
+        Ambil jumlah calon.
+      */
 
-      // =======================================================
-      // SIMPAN / UPDATE HASIL
-      // =======================================================
+      const {
+        data: masterDesa
+      } = await supabase
+        .from('master_desa')
+        .select(
+          'jumlah_calon'
+        )
+        .eq(
+          'kecamatan',
+          petugasLogin.kecamatan
+        )
+        .eq(
+          'desa',
+          petugasLogin.desa
+        )
+        .eq(
+          'tps',
+          tpsTarget
+        )
+        .maybeSingle();
+
+      const jumlahCalon =
+        Math.min(
+          Math.max(
+            Number(
+              masterDesa?.jumlah_calon || 2
+            ),
+            1
+          ),
+          MAX_CALON
+        );
+
+      const parsed =
+        parseVoteInput(
+          text,
+          jumlahCalon
+        );
+
+      if (parsed.error) {
+
+        await sendMessage(
+          chatId,
+
+          `❌ <b>INPUT TIDAK VALID</b>\n\n` +
+          `${escapeHtml(
+            parsed.error
+          )}\n\n` +
+
+          `Untuk <b>${jumlahCalon} calon</b>:\n` +
+
+          `<code>${Array(
+            jumlahCalon + 1
+          ).fill('0').join('#')}</code>\n\n` +
+
+          `Angka terakhir = <b>Tidak Sah</b>.`
+        );
+
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
+      }
+
+      const vote =
+        parsed.result;
+
+      /*
+        Upsert sebagai WAITING_C1,
+        BUKAN AUTO_VERIFIED.
+      */
 
       const {
         data: hasilData,
-        error: errHasil
+        error: hasilError
       } = await supabase
         .from('hasil_suara')
         .upsert(
           {
-            kecamatan: petugasLogin.kecamatan,
-            desa: petugasLogin.desa,
-            tps: tpsTarget,
 
-            nrp_saksi: petugasLogin.nrp,
-            nama_saksi: petugasLogin.nama_petugas,
+            kecamatan:
+              petugasLogin.kecamatan,
 
-            suara_calon_01: c01,
-            suara_calon_02: c02,
-            suara_calon_03: c03,
-            suara_calon_04: c04,
-            suara_calon_05: c05,
+            desa:
+              petugasLogin.desa,
 
-            suara_tidak_sah: suaraTidakSah,
+            tps:
+              tpsTarget,
 
-            total_suara_masuk: totalSuara,
+            nrp_saksi:
+              petugasLogin.nrp,
 
-            status_verifikasi: 'AUTO_VERIFIED',
+            nama_saksi:
+              petugasLogin.nama_petugas,
 
-            chat_id_saksi: chatId
+            suara_calon_01:
+              vote.calon_01,
+
+            suara_calon_02:
+              vote.calon_02,
+
+            suara_calon_03:
+              vote.calon_03,
+
+            suara_calon_04:
+              vote.calon_04,
+
+            suara_calon_05:
+              vote.calon_05,
+
+            suara_tidak_sah:
+              vote.tidak_sah,
+
+            total_suara_masuk:
+              vote.total,
+
+            status_verifikasi:
+              'WAITING_C1',
+
+            chat_id_saksi:
+              chatId,
+
+            input_format:
+              text,
+
+            /*
+              Bersihkan data OCR lama
+              bila TPS dikirim ulang.
+            */
+
+            ocr_text:
+              null,
+
+            ocr_calon_01:
+              null,
+
+            ocr_calon_02:
+              null,
+
+            ocr_calon_03:
+              null,
+
+            ocr_calon_04:
+              null,
+
+            ocr_calon_05:
+              null,
+
+            ocr_tidak_sah:
+              null,
+
+            ocr_confidence:
+              null,
+
+            telegram_photo_file_id:
+              null,
+
+            telegram_photo_file_unique_id:
+              null,
+
+            user_confirmation:
+              null,
+
+            verified_by:
+              null,
+
+            verified_at:
+              null,
+
+            catatan_verifikasi:
+              null
           },
+
           {
-            onConflict: 'kecamatan,desa,tps'
+            onConflict:
+              'kecamatan,desa,tps'
           }
         )
-        .select();
+        .select()
+        .single();
 
-      if (errHasil) {
+      if (hasilError) {
 
         console.error(
-          'SUPABASE ERROR HASIL SUARA:',
-          errHasil
+          'ERROR SIMPAN SUARA:',
+          hasilError
         );
 
         await sendMessage(
           chatId,
 
           `❌ <b>GAGAL MENYIMPAN HASIL</b>\n\n` +
-
-          `Pesan sistem:\n` +
-          `<code>${escapeHtml(errHasil.message)}</code>\n\n` +
-
-          `Silakan hubungi Admin jika masalah terus terjadi.`
+          `<code>${escapeHtml(
+            hasilError.message
+          )}</code>`
         );
 
-        return res.status(200).json({ ok: true });
+        return res
+          .status(200)
+          .json({
+            ok: true
+          });
       }
-
-      console.log(
-        'HASIL SUARA BERHASIL DISIMPAN:',
-        JSON.stringify(hasilData)
-      );
-
-      // =======================================================
-      // KONFIRMASI KE PETUGAS
-      // =======================================================
 
       let rincian = '';
 
-      rincian += `• Calon 01: <b>${c01}</b>\n`;
+      for (
+        let i = 1;
+        i <= jumlahCalon;
+        i++
+      ) {
 
-      rincian += `• Calon 02: <b>${c02}</b>\n`;
+        const key =
+          `calon_${String(i).padStart(2, '0')}`;
 
-      rincian += `• Calon 03: <b>${c03}</b>\n`;
-
-      if (rawArray.length >= 4) {
-        rincian += `• Calon 04: <b>${c04}</b>\n`;
+        rincian +=
+          `• Calon ${String(i).padStart(2, '0')}: ` +
+          `<b>${vote[key]}</b>\n`;
       }
 
-      if (rawArray.length >= 5) {
-        rincian += `• Calon 05: <b>${c05}</b>\n`;
-      }
-
-      rincian += `• Tidak Sah: <b>${suaraTidakSah}</b>\n`;
+      rincian +=
+        `• Tidak Sah: <b>${vote.tidak_sah}</b>\n` +
+        `-------------------------\n` +
+        `• <b>Total Suara Masuk: ${vote.total}</b>`;
 
       await sendMessage(
         chatId,
 
-        `📊 <b>RINCIAN ANGKA TERCATAT</b>\n\n` +
+        `📊 <b>ANGKA DITERIMA</b>\n\n` +
 
-        `📍 TPS : <b>${escapeHtml(tpsTarget)}</b>\n\n` +
+        `📍 TPS : <b>${escapeHtml(
+          tpsTarget
+        )}</b>\n\n` +
 
         rincian +
 
-        `-------------------------\n` +
+        `\n\n🟡 Status: <b>MENUNGGU FOTO C1</b>\n\n` +
 
-        `• <b>Total Suara Masuk: ${totalSuara}</b>\n\n` +
+        `Silakan kirim <b>foto C1 Plano</b> ` +
+        `TPS ini sekarang.\n\n` +
 
-        `✅ Data berhasil disimpan ke sistem.\n\n` +
-
-        `Langkah 3:\n` +
-
-        `Silakan ambil/upload <b>Foto Lembar C1 Plano</b> ` +
-        `dari HP Anda.\n\n` +
-
-        `📌 Untuk mengirim hasil TPS lain, ketik:\n` +
-        `<code>/kirimhasil</code>`
+        `Bot akan membandingkan foto C1 dengan ` +
+        `angka yang Anda kirim sebelum data dinyatakan terverifikasi.`
       );
 
-      return res.status(200).json({ ok: true });
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
     }
 
-    // =========================================================
-    // 11. PESAN DEFAULT
-    // =========================================================
+
+    /*
+      ======================================================
+      DEFAULT
+      ======================================================
+    */
 
     await sendMessage(
       chatId,
 
       `ℹ️ <b>PERINTAH TIDAK DIKENALI</b>\n\n` +
 
-      `Gunakan salah satu perintah berikut:\n\n` +
+      `Gunakan:\n\n` +
 
       `<code>/start</code> - Menu awal\n` +
-      `<code>/reg NRP</code> - Registrasi petugas\n` +
-      `<code>/kirimhasil</code> - Kirim hasil suara\n` +
-      `<code>/status</code> - Cek status akun\n` +
+      `<code>/reg NRP</code> - Registrasi\n` +
+      `<code>/kirimhasil</code> - Kirim hasil\n` +
+      `<code>/status</code> - Status akun\n` +
       `<code>/batal</code> - Batalkan proses`
     );
 
-    return res.status(200).json({ ok: true });
+    return res
+      .status(200)
+      .json({
+        ok: true
+      });
 
   } catch (error) {
 
-    // =========================================================
-    // ERROR GLOBAL
-    // =========================================================
-
     console.error(
       '========================================'
     );
 
     console.error(
-      'ERROR GLOBAL WEBHOOK:'
+      'GLOBAL WEBHOOK ERROR:'
     );
 
     console.error(
-      error?.stack || error?.message || error
+      error?.stack ||
+      error?.message ||
+      error
     );
 
     console.error(
       '========================================'
     );
 
-    // Tetap balas 200 ke Telegram supaya Telegram
-    // tidak terus-menerus mengulang update yang sama.
-    return res.status(200).json({
-      ok: true
-    });
+    /*
+      Tetap 200 agar Telegram tidak mengirim
+      update yang sama berulang-ulang.
+    */
+
+    return res
+      .status(200)
+      .json({
+        ok: true
+      });
   }
 }
