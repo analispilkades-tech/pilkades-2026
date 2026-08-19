@@ -6,46 +6,52 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // Izinkan CORS agar frontend tidak terblokir peramban
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method Not Allowed' });
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const { action, username, password } = body;
 
-    // Verifikasi Login Admin
     if (action === 'login' || !action) {
-      const envUser = process.env.ADMIN_USERNAME || 'admin';
-      const envPass = process.env.ADMIN_PASSWORD || 'admin123';
+      // Cek kredensial ke tabel master_admin di Supabase
+      const { data: adminData, error } = await supabase
+        .from('master_admin')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password)
+        .maybeSingle();
 
-      if (username === envUser && password === envPass) {
+      if (error) {
+        console.error('SUPABASE DB ERROR:', error);
+        return res.status(500).json({ success: false, message: 'Kesalahan saat mengakses database' });
+      }
+
+      if (adminData) {
         return res.status(200).json({
+          success: true,
           ok: true,
-          token: 'ADMIN_SESSION_TOKEN_2026',
+          role: adminData.role || 'SUPER_ADMIN',
+          nama: adminData.nama_lengkap || 'Panitia Utama',
           message: 'Login Berhasil'
         });
       } else {
         return res.status(401).json({
+          success: false,
           ok: false,
-          error: 'Username atau Password salah!'
+          message: 'Username atau Password salah!'
         });
       }
     }
 
-    return res.status(400).json({ ok: false, error: 'Aksi tidak valid' });
+    return res.status(400).json({ success: false, message: 'Aksi tidak valid' });
 
-  } catch (error) {
-    console.error('ADMIN AUTH ERROR:', error);
-    return res.status(500).json({ ok: false, error: error.message || 'Terjadi kesalahan pada server' });
+  } catch (err) {
+    console.error('SERVER ERROR:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Terjadi kesalahan pada server' });
   }
 }
