@@ -71,9 +71,49 @@
         const result = await res.json().catch(() => null);
 
         if (res.ok && (result?.success || result?.ok)) {
-          // Simpan sesi autentikasi ke localStorage
-          localStorage.setItem("adminToken", result.role || "AUTHENTICATED");
-          localStorage.setItem("adminNama", result.nama || result.nama_lengkap || "Admin");
+async function loginAdmin(){
+
+  const nrp =
+    document
+      .getElementById('nrp')
+      .value
+      .trim();
+
+  const pin =
+    document
+      .getElementById('pin')
+      .value
+      .trim();
+
+  const res = await fetch(
+    '/api/admin-login',
+    {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({
+        nrp,
+        pin
+      })
+    }
+  );
+
+  const result =
+    await res.json();
+
+  if(!result.ok){
+
+    alert(
+      result.error
+    );
+
+    return;
+  }
+
+  window.location='/admin';
+
+}
           
           // Redireksi ke dasbor admin
           window.location.href = "/admin";
