@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '../lib/admin-session.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -21,6 +22,17 @@ export default async function handler(req, res) {
     });
   }
 
+const auth = await requireAdmin(req);
+
+if (!auth.ok) {
+  return res.status(auth.status).json({
+    ok: false,
+    error: auth.error
+  });
+}
+
+const admin = auth.admin;
+
   try {
 
     /*
@@ -29,10 +41,22 @@ export default async function handler(req, res) {
      * =========================================================
      */
 
-    const { data: hasilData, error: hasilErr } = await supabase
-      .from('hasil_suara')
-      .select('*')
-      .order('id', { ascending: false });
+let hasilQuery = supabase
+  .from('hasil_suara')
+  .select('*');
+
+if (
+  admin.role === 'ADMIN_KECAMATAN' &&
+  admin.kecamatan
+) {
+  hasilQuery = hasilQuery.in('kecamatan', admin.kecamatan);
+}
+
+const { data: hasilData, error: hasilErr } =
+  await hasilQuery.order(
+    'id',
+    { ascending: false }
+  );
 
     if (hasilErr) {
       console.error(
@@ -48,9 +72,19 @@ export default async function handler(req, res) {
      * =========================================================
      */
 
-    const { data: masterData, error: masterErr } = await supabase
-      .from('master_desa')
-      .select('*');
+    let masterQuery = supabase
+  .from('master_desa')
+  .select('*');
+
+if (
+  admin.role === 'ADMIN_KECAMATAN' &&
+  admin.kecamatan
+) {
+  masterQuery = masterQuery.in('kecamatan', admin.kecamatan);
+}
+
+const { data: masterData, error: masterErr } =
+  await masterQuery;
 
     if (masterErr) {
       console.error(
@@ -68,29 +102,42 @@ export default async function handler(req, res) {
      * =========================================================
      */
 
-    const { data: planoData, error: planoErr } = await supabase
-      .from('plano_uploads')
-      .select(`
-        id,
-        hasil_suara_id,
-        google_drive_url,
-        ocr_status,
-        ocr_engine,
-        ocr_text,
-        ocr_calon_01,
-        ocr_calon_02,
-        ocr_calon_03,
-        ocr_calon_04,
-        ocr_calon_05,
-        ocr_tidak_sah,
-        ocr_total_suara,
-        ocr_confidence,
-        ocr_started_at,
-        ocr_processed_at,
-        ocr_error,
-        created_at
-      `)
-      .order('id', { ascending: false });
+    let planoQuery = supabase
+  .from('plano_uploads')
+  .select(`
+    id,
+    hasil_suara_id,
+    google_drive_url,
+    ocr_status,
+    ocr_engine,
+    ocr_text,
+    ocr_calon_01,
+    ocr_calon_02,
+    ocr_calon_03,
+    ocr_calon_04,
+    ocr_calon_05,
+    ocr_tidak_sah,
+    ocr_total_suara,
+    ocr_confidence,
+    ocr_started_at,
+    ocr_processed_at,
+    ocr_error,
+    created_at,
+    kecamatan
+  `);
+
+if (
+  admin.role === 'ADMIN_KECAMATAN' &&
+  admin.kecamatan
+) {
+  planoQuery = planoQuery.in('kecamatan', admin.kecamatan);
+}
+
+const { data: planoData, error: planoErr } =
+  await planoQuery.order(
+    'id',
+    { ascending: false }
+  );
 
     if (planoErr) {
       console.error(
