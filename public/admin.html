@@ -863,23 +863,23 @@ async function adminVerify(
 
   /*
   -------------------------------------------------------
-  RESET
+  ROLLBACK VERIFIKASI
   -------------------------------------------------------
   */
 
   else if (
     action ===
-    'RESET_VERIFIKASI'
+    'ROLLBACK_VERIFIKASI'
   ) {
 
     pesan =
-      `Reset status verifikasi?\n\n` +
+      `Rollback status verifikasi?\n\n` +
 
       `Desa: ${item.desa || '-'}\n` +
 
       `TPS: ${item.tps || '-'}\n\n` +
 
-      `Data akan dikembalikan ke antrean audit.`;
+      `Data yang sudah diverifikasi akan dikembalikan ke status MEMERLUKAN VERIFIKASI ADMIN. Setelah rollback, data dapat diaudit dan dikoreksi kembali.`;
 
   }
 
@@ -1460,13 +1460,13 @@ function renderAdminTable(
 
 
 
-              <!-- RESET -->
+              <!-- ROLLBACK -->
 
               <button
-                onclick="adminVerify('${item.id}', 'RESET_VERIFIKASI')"
+                onclick="adminVerify('${item.id}', 'ROLLBACK_VERIFIKASI')"
                 class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg text-xs font-bold"
               >
-                ↩️ Reset Audit
+                ↩️ Rollback Verifikasi
               </button>
 
             </div>
