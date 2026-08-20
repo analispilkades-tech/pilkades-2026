@@ -574,21 +574,33 @@ LOAD
 */
 
 document.addEventListener(
-  "DOMContentLoaded",
-  () => {
+  'DOMContentLoaded',
+  async()=>{
 
-    const adminNama =
-      localStorage.getItem("adminNama") ||
-      "Admin";
+    const res =
+      await fetch(
+        '/api/admin-auth'
+      );
 
-    document.getElementById(
-      "adminNameDisplay"
-    ).innerText =
-      `Logged as: ${adminNama}`;
+    if(!res.ok){
 
+      window.location='/login';
+
+      return;
+
+    }
+
+    const result =
+      await res.json();
+
+    document
+      .getElementById(
+        'adminNameDisplay'
+      )
+      .innerText=
+      `Logged as: ${result.admin.nama}`;
 
     fetchAdminData();
-
 
     setInterval(
       fetchAdminData,
@@ -597,8 +609,6 @@ document.addEventListener(
 
   }
 );
-
-
 
 /*
 =========================================================
