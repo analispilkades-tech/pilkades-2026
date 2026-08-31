@@ -2106,12 +2106,12 @@ async function handleCallback(cb) {
      *
      * OCR tetap tersimpan sebagai histori.
      */
-    await supabase
-      .from('plano_uploads')
-      .update({
-        ocr_status: 'SELECTED'
-      })
-      .eq('id', plano.id);
+/*
+ * OCR tetap berstatus COMPLETED.
+ * Pilihan pengguna sudah dicatat pada hasil_suara
+ * dan log_aktivitas sehingga tidak perlu mengubah
+ * status OCR menjadi SELECTED.
+ */
 
     /*
      * Tampilkan hasil yang sekarang digunakan

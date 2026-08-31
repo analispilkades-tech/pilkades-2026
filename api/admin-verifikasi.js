@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
 );
+
 
 /*
 =========================================================
@@ -19,32 +21,47 @@ const ACTIONS = [
   'ROLLBACK_VERIFIKASI'
 ];
 
+
 const MIN_OCR_CONFIDENCE = 40;
 
-/*
- * Status FINAL.
- *
- * Setelah status ini tercapai:
- *
- * SAHKAN_MANUAL  -> LOCK
- * SAHKAN_PLANO   -> LOCK
- * UBAH_DATA      -> LOCK
- *
- * Satu-satunya jalan membuka kembali:
- *
- * ROLLBACK_VERIFIKASI
- */
-const STATUS_FINAL = 'VERIFIED_BY_ADMIN';
 
 /*
- * Status setelah rollback.
- */
+---------------------------------------------------------
+STATUS FINAL
+---------------------------------------------------------
+
+Setelah VERIFIED_BY_ADMIN:
+
+SAHKAN_MANUAL  -> LOCK
+SAHKAN_PLANO   -> LOCK
+UBAH_DATA      -> LOCK
+
+Satu-satunya jalan membuka kembali:
+
+ROLLBACK_VERIFIKASI
+---------------------------------------------------------
+*/
+
+const STATUS_FINAL =
+  'VERIFIED_BY_ADMIN';
+
+
+/*
+---------------------------------------------------------
+STATUS SETELAH ROLLBACK
+---------------------------------------------------------
+*/
+
 const STATUS_ROLLBACK =
   'MEMERLUKAN VERIFIKASI ADMIN';
 
+
 /*
- * Secret untuk hashing token session.
- */
+---------------------------------------------------------
+SECRET SESSION
+---------------------------------------------------------
+*/
+
 const SESSION_SECRET =
   process.env.SESSION_SECRET;
 
@@ -87,35 +104,50 @@ function readCookie(req, name) {
     return null;
   }
 
+
   const parts =
     cookie.split(';');
+
 
   for (const part of parts) {
 
     const index =
       part.indexOf('=');
 
+
     if (index === -1) {
       continue;
     }
+
 
     const key =
       part
         .slice(0, index)
         .trim();
 
+
     const value =
       part
         .slice(index + 1)
         .trim();
 
+
     if (key === name) {
 
-      return decodeURIComponent(value);
+      try {
+
+        return decodeURIComponent(value);
+
+      } catch (_) {
+
+        return value;
+
+      }
 
     }
 
   }
+
 
   return null;
 
@@ -133,11 +165,13 @@ function numberOrZero(value) {
   const n =
     Number(value);
 
+
   if (!Number.isFinite(n)) {
 
     return 0;
 
   }
+
 
   return Math.max(
     0,
@@ -206,10 +240,15 @@ async function getAuthenticatedAdmin(req) {
       '[ADMIN VERIFIKASI] SESSION_SECRET belum diset.'
     );
 
+
     return {
+
       error:
         'Konfigurasi autentikasi server belum lengkap.',
-      status: 500
+
+      status:
+        500
+
     };
 
   }
@@ -231,9 +270,13 @@ async function getAuthenticatedAdmin(req) {
   if (!token) {
 
     return {
+
       error:
         'Belum login.',
-      status: 401
+
+      status:
+        401
+
     };
 
   }
@@ -261,6 +304,7 @@ async function getAuthenticatedAdmin(req) {
   const {
 
     data: session,
+
     error
 
   } = await supabase
@@ -303,10 +347,15 @@ async function getAuthenticatedAdmin(req) {
       error
     );
 
+
     return {
+
       error:
         'Gagal memeriksa session admin.',
-      status: 500
+
+      status:
+        500
+
     };
 
   }
@@ -324,9 +373,13 @@ async function getAuthenticatedAdmin(req) {
   ) {
 
     return {
+
       error:
         'Session admin tidak valid atau sudah berakhir.',
-      status: 401
+
+      status:
+        401
+
     };
 
   }
@@ -345,9 +398,13 @@ async function getAuthenticatedAdmin(req) {
   if (!admin.aktif) {
 
     return {
+
       error:
         'Akun admin sudah tidak aktif.',
-      status: 403
+
+      status:
+        403
+
     };
 
   }
@@ -377,8 +434,11 @@ async function getAuthenticatedAdmin(req) {
 
 
   return {
+
     admin,
+
     session
+
   };
 
 }
@@ -389,18 +449,6 @@ async function getAuthenticatedAdmin(req) {
 ADMIN AUTHORIZATION
 =========================================================
 */
-
-/*
- * Fungsi ini memeriksa apakah admin boleh
- * memproses kecamatan tertentu.
- *
- * SUPERADMIN:
- *   boleh semua kecamatan.
- *
- * ADMIN_KECAMATAN:
- *   hanya kecamatan yang terdapat pada field
- *   admin.kecamatan.
- */
 
 function adminCanAccessKecamatan(
   admin,
@@ -433,7 +481,7 @@ function adminCanAccessKecamatan(
 
   /*
   -------------------------------------------------------
-  ADMIN KECAMATAN
+  TARGET KECAMATAN
   -------------------------------------------------------
   */
 
@@ -457,7 +505,9 @@ function adminCanAccessKecamatan(
 
 
   /*
-  Jika database menyimpan array.
+  -------------------------------------------------------
+  DATABASE ARRAY
+  -------------------------------------------------------
   */
 
   if (
@@ -465,20 +515,23 @@ function adminCanAccessKecamatan(
   ) {
 
     return allowed
-      .map(x =>
-        String(x)
-          .trim()
-          .toUpperCase()
+      .map(
+        x =>
+          String(x)
+            .trim()
+            .toUpperCase()
       )
-      .includes(target);
+      .includes(
+        target
+      );
 
   }
 
 
   /*
-  Jika database menyimpan string JSON.
-  Contoh:
-  ["SAPURAN","KALIWIRO"]
+  -------------------------------------------------------
+  DATABASE STRING
+  -------------------------------------------------------
   */
 
   if (
@@ -490,7 +543,7 @@ function adminCanAccessKecamatan(
 
 
     /*
-    Coba parse JSON array.
+    JSON ARRAY
     */
 
     if (
@@ -502,26 +555,30 @@ function adminCanAccessKecamatan(
         const parsed =
           JSON.parse(value);
 
+
         if (
           Array.isArray(parsed)
         ) {
 
           return parsed
-            .map(x =>
-              String(x)
-                .trim()
-                .toUpperCase()
+            .map(
+              x =>
+                String(x)
+                  .trim()
+                  .toUpperCase()
             )
-            .includes(target);
+            .includes(
+              target
+            );
 
         }
 
       } catch (_) {
 
         /*
-         * Bukan JSON.
-         * Lanjut sebagai string biasa.
-         */
+        Bukan JSON.
+        Lanjut sebagai string biasa.
+        */
 
       }
 
@@ -529,17 +586,20 @@ function adminCanAccessKecamatan(
 
 
     /*
-    Jika formatnya:
+    -----------------------------------------------------
+    FORMAT:
     SAPURAN,KALIWIRO
+    -----------------------------------------------------
     */
 
     const list =
       value
         .split(',')
-        .map(x =>
-          x
-            .trim()
-            .toUpperCase()
+        .map(
+          x =>
+            x
+              .trim()
+              .toUpperCase()
         )
         .filter(Boolean);
 
@@ -566,13 +626,15 @@ async function logAktivitas({
 
   jenis_aksi,
 
-  admin,
+  admin_nama = 'Admin',
 
   hasil_sebelum = null,
 
   hasil_sesudah = null,
 
-  keterangan = ''
+  keterangan = '',
+
+  rollback_reason = null
 
 }) {
 
@@ -622,17 +684,10 @@ async function logAktivitas({
             hasil_sesudah,
 
           keterangan:
+            `[Admin: ${admin_nama}] ${keterangan}`,
 
-            `[Admin: ${
-              admin?.nama ||
-              'Admin'
-            } | NRP: ${
-              admin?.nrp ||
-              '-'
-            } | Role: ${
-              admin?.role ||
-              '-'
-            }] ${keterangan}`
+          rollback_reason:
+            rollback_reason || null
 
         });
 
@@ -671,7 +726,7 @@ export default async function handler(
 
   /*
   -------------------------------------------------------
-  METHOD
+  OPTIONS
   -------------------------------------------------------
   */
 
@@ -686,6 +741,12 @@ export default async function handler(
   }
 
 
+  /*
+  -------------------------------------------------------
+  POST ONLY
+  -------------------------------------------------------
+  */
+
   if (
     req.method !== 'POST'
   ) {
@@ -694,7 +755,8 @@ export default async function handler(
       .status(405)
       .json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           'Method not allowed'
@@ -726,7 +788,8 @@ export default async function handler(
         )
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             auth.error
@@ -738,6 +801,12 @@ export default async function handler(
 
     const admin =
       auth.admin;
+
+
+    const adminNama =
+      admin?.nama ||
+      admin?.nrp ||
+      'Admin';
 
 
     /*
@@ -753,11 +822,14 @@ export default async function handler(
     const id =
       body.id;
 
+
     const action =
       body.action;
 
+
     const data =
       body.data;
+
 
     const rollback_reason =
       body.rollback_reason;
@@ -775,7 +847,8 @@ export default async function handler(
         .status(400)
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             'ID hasil_suara wajib diisi.'
@@ -799,7 +872,8 @@ export default async function handler(
         .status(400)
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             `Aksi admin tidak valid. ` +
@@ -844,11 +918,13 @@ export default async function handler(
         hasilError
       );
 
+
       return res
         .status(500)
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             hasilError.message ||
@@ -865,7 +941,8 @@ export default async function handler(
         .status(404)
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           error:
             'Data hasil suara tidak ditemukan.'
@@ -894,11 +971,13 @@ export default async function handler(
         `Kecamatan=${hasil.kecamatan}`
       );
 
+
       return res
         .status(403)
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           code:
             'KECAMATAN_ACCESS_DENIED',
@@ -980,19 +1059,6 @@ export default async function handler(
     -------------------------------------------------------
     DATA SUDAH FINAL
     -------------------------------------------------------
-
-    Jika sudah VERIFIED_BY_ADMIN:
-
-      SAHKAN_MANUAL  -> DITOLAK
-      SAHKAN_PLANO   -> DITOLAK
-      UBAH_DATA      -> DITOLAK
-
-    Hanya:
-
-      ROLLBACK_VERIFIKASI
-
-    yang diperbolehkan.
-    -------------------------------------------------------
     */
 
     if (
@@ -1005,7 +1071,8 @@ export default async function handler(
         .status(409)
         .json({
 
-          ok: false,
+          ok:
+            false,
 
           code:
             'DATA_ALREADY_VERIFIED',
@@ -1034,21 +1101,6 @@ export default async function handler(
       action ===
       'SAHKAN_MANUAL'
     ) {
-
-      /*
-      -----------------------------------------------------
-      UPDATE DENGAN LOCK DATABASE
-      -----------------------------------------------------
-
-      Kondisi:
-
-      id harus sama
-      DAN
-      status belum final
-
-      Ini melindungi dari race condition.
-      -----------------------------------------------------
-      */
 
       const {
 
@@ -1089,11 +1141,13 @@ export default async function handler(
           updateError
         );
 
+
         return res
           .status(500)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               updateError.message
@@ -1103,19 +1157,14 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      UPDATE TIDAK TERJADI
-      -----------------------------------------------------
-      */
-
       if (!updated) {
 
         return res
           .status(409)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             code:
               'DATA_ALREADY_CHANGED',
@@ -1129,18 +1178,13 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      AUDIT
-      -----------------------------------------------------
-      */
-
       await logAktivitas({
 
         jenis_aksi:
           'ADMIN_SAHKAN_MANUAL',
 
-        admin,
+        admin_nama:
+          adminNama,
 
         hasil_sebelum:
           dataSebelum,
@@ -1156,7 +1200,7 @@ export default async function handler(
 
 
       console.log(
-        `[ADMIN] ${admin.nama} ` +
+        `[ADMIN] ${adminNama} ` +
         `(NRP ${admin.nrp}) ` +
         `mengesahkan INPUT MANUAL ` +
         `hasil_suara ID=${id}`
@@ -1167,7 +1211,8 @@ export default async function handler(
         .status(200)
         .json({
 
-          ok: true,
+          ok:
+            true,
 
           message:
             'Hasil input manual berhasil disahkan admin.',
@@ -1242,11 +1287,13 @@ export default async function handler(
           planoError
         );
 
+
         return res
           .status(500)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               planoError.message
@@ -1262,7 +1309,8 @@ export default async function handler(
           .status(404)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               'Hasil OCR plano belum tersedia.'
@@ -1274,7 +1322,7 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      CEK CONFIDENCE OCR
+      CONFIDENCE
       -----------------------------------------------------
       */
 
@@ -1296,7 +1344,8 @@ export default async function handler(
           .status(400)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             code:
               'OCR_CONFIDENCE_TOO_LOW',
@@ -1361,7 +1410,7 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      HITUNG TOTAL
+      TOTAL OCR
       -----------------------------------------------------
       */
 
@@ -1373,7 +1422,7 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      UPDATE DENGAN FINAL LOCK
+      UPDATE
       -----------------------------------------------------
       */
 
@@ -1437,11 +1486,13 @@ export default async function handler(
           updateError
         );
 
+
         return res
           .status(500)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               updateError.message
@@ -1451,19 +1502,14 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      RACE CONDITION / SUDAH DIKUNCI
-      -----------------------------------------------------
-      */
-
       if (!updated) {
 
         return res
           .status(409)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             code:
               'DATA_ALREADY_CHANGED',
@@ -1477,18 +1523,13 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      AUDIT
-      -----------------------------------------------------
-      */
-
       await logAktivitas({
 
         jenis_aksi:
           'ADMIN_SAHKAN_PLANO',
 
-        admin,
+        admin_nama:
+          adminNama,
 
         hasil_sebelum:
           dataSebelum,
@@ -1504,7 +1545,7 @@ export default async function handler(
 
 
       console.log(
-        `[ADMIN] ${admin.nama} ` +
+        `[ADMIN] ${adminNama} ` +
         `(NRP ${admin.nrp}) ` +
         `mengesahkan HASIL PLANO ` +
         `hasil_suara ID=${id}`
@@ -1515,7 +1556,8 @@ export default async function handler(
         .status(200)
         .json({
 
-          ok: true,
+          ok:
+            true,
 
           message:
             'Hasil plano berhasil disahkan admin.',
@@ -1558,14 +1600,16 @@ export default async function handler(
 
       if (
         !data ||
-        typeof data !== 'object'
+        typeof data !== 'object' ||
+        Array.isArray(data)
       ) {
 
         return res
           .status(400)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               'Data perubahan wajib dikirim.'
@@ -1618,7 +1662,7 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      HITUNG TOTAL SERVER-SIDE
+      TOTAL SERVER-SIDE
       -----------------------------------------------------
       */
 
@@ -1630,7 +1674,7 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      UPDATE DENGAN FINAL LOCK
+      UPDATE DENGAN LOCK
       -----------------------------------------------------
       */
 
@@ -1694,11 +1738,13 @@ export default async function handler(
           updateError
         );
 
+
         return res
           .status(500)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               updateError.message
@@ -1708,19 +1754,14 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      UPDATE TIDAK TERJADI
-      -----------------------------------------------------
-      */
-
       if (!updated) {
 
         return res
           .status(409)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             code:
               'DATA_ALREADY_CHANGED',
@@ -1734,18 +1775,13 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      AUDIT
-      -----------------------------------------------------
-      */
-
       await logAktivitas({
 
         jenis_aksi:
           'ADMIN_UBAH_DATA',
 
-        admin,
+        admin_nama:
+          adminNama,
 
         hasil_sebelum:
           dataSebelum,
@@ -1761,7 +1797,7 @@ export default async function handler(
 
 
       console.log(
-        `[ADMIN] ${admin.nama} ` +
+        `[ADMIN] ${adminNama} ` +
         `(NRP ${admin.nrp}) ` +
         `MENGUBAH DATA ` +
         `hasil_suara ID=${id}`
@@ -1772,7 +1808,8 @@ export default async function handler(
         .status(200)
         .json({
 
-          ok: true,
+          ok:
+            true,
 
           message:
             'Data hasil suara berhasil diubah ' +
@@ -1803,54 +1840,24 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      HANYA DATA FINAL YANG BOLEH DI-ROLLBACK
+      VALIDASI ALASAN
       -----------------------------------------------------
       */
 
-      if (
-        hasil.status_verifikasi !==
-        STATUS_FINAL
-      ) {
-
-        return res
-          .status(409)
-          .json({
-
-            ok: false,
-
-            code:
-              'DATA_NOT_FINAL',
-
-            error:
-              'Rollback hanya dapat dilakukan ' +
-              'pada data yang sudah diverifikasi final.',
-
-            status_verifikasi:
-              hasil.status_verifikasi
-
-          });
-
-      }
+      const alasanRollback =
+        String(
+          rollback_reason || ''
+        ).trim();
 
 
-      /*
-      -----------------------------------------------------
-      ALASAN WAJIB
-      -----------------------------------------------------
-      */
-
-      if (
-        !rollback_reason ||
-        !String(
-          rollback_reason
-        ).trim()
-      ) {
+      if (!alasanRollback) {
 
         return res
           .status(400)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             code:
               'ROLLBACK_REASON_REQUIRED',
@@ -1863,23 +1870,86 @@ export default async function handler(
       }
 
 
-      const alasanRollback =
-        String(
-          rollback_reason
-        ).trim();
+      if (
+        alasanRollback.length < 5
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            ok:
+              false,
+
+            code:
+              'ROLLBACK_REASON_TOO_SHORT',
+
+            error:
+              'Alasan rollback minimal 5 karakter.'
+
+          });
+
+      }
+
+
+      if (
+        alasanRollback.length > 1000
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            ok:
+              false,
+
+            code:
+              'ROLLBACK_REASON_TOO_LONG',
+
+            error:
+              'Alasan rollback maksimal 1000 karakter.'
+
+          });
+
+      }
 
 
       /*
       -----------------------------------------------------
-      UPDATE DENGAN CONDITION LOCK
+      HARUS FINAL
       -----------------------------------------------------
+      */
 
-      Hanya:
+      if (
+        hasil.status_verifikasi !==
+        STATUS_FINAL
+      ) {
 
-      VERIFIED_BY_ADMIN
-          ↓
-      MEMERLUKAN VERIFIKASI ADMIN
+        return res
+          .status(409)
+          .json({
 
+            ok:
+              false,
+
+            code:
+              'DATA_NOT_VERIFIED',
+
+            error:
+              'Data belum berstatus VERIFIED_BY_ADMIN, ' +
+              'sehingga tidak perlu di-rollback.',
+
+            status_verifikasi:
+              hasil.status_verifikasi
+
+          });
+
+      }
+
+
+      /*
+      -----------------------------------------------------
+      ROLLBACK DENGAN LOCK
       -----------------------------------------------------
       */
 
@@ -1922,11 +1992,13 @@ export default async function handler(
           updateError
         );
 
+
         return res
           .status(500)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             error:
               updateError.message
@@ -1936,26 +2008,21 @@ export default async function handler(
       }
 
 
-      /*
-      -----------------------------------------------------
-      ROLLBACK TIDAK TERJADI
-      -----------------------------------------------------
-      */
-
       if (!updated) {
 
         return res
           .status(409)
           .json({
 
-            ok: false,
+            ok:
+              false,
 
             code:
               'ROLLBACK_FAILED',
 
             error:
-              'Rollback gagal karena status data ' +
-              'sudah berubah atau sedang diproses admin lain.'
+              'Rollback gagal karena data sudah berubah ' +
+              'atau sudah diproses admin lain.'
 
           });
 
@@ -1964,7 +2031,7 @@ export default async function handler(
 
       /*
       -----------------------------------------------------
-      AUDIT ROLLBACK
+      AUDIT LOG
       -----------------------------------------------------
       */
 
@@ -1973,7 +2040,8 @@ export default async function handler(
         jenis_aksi:
           'ADMIN_ROLLBACK_VERIFIKASI',
 
-        admin,
+        admin_nama:
+          adminNama,
 
         hasil_sebelum:
           dataSebelum,
@@ -1981,34 +2049,49 @@ export default async function handler(
         hasil_sesudah:
           updated,
 
+        rollback_reason:
+          alasanRollback,
+
         keterangan:
-          `Admin melakukan rollback verifikasi. ` +
-          `Alasan: ${alasanRollback}`
+          'Admin melakukan rollback verifikasi dan ' +
+          'membuka kembali data untuk audit/review.'
 
       });
 
 
       console.log(
-        `[ADMIN] ${admin.nama} ` +
+
+        `[ADMIN] ${adminNama} ` +
         `(NRP ${admin.nrp}) ` +
         `ROLLBACK VERIFIKASI ` +
         `hasil_suara ID=${id} ` +
-        `Alasan="${alasanRollback}"`
+        `alasan="${alasanRollback}"`
+
       );
 
+
+      /*
+      -----------------------------------------------------
+      RESPONSE
+      -----------------------------------------------------
+      */
 
       return res
         .status(200)
         .json({
 
-          ok: true,
+          ok:
+            true,
 
           message:
-            'Verifikasi berhasil di-rollback. ' +
+            'Rollback verifikasi berhasil. ' +
             'Data kembali ke antrean verifikasi admin.',
 
           status_verifikasi:
             STATUS_ROLLBACK,
+
+          rollback_reason:
+            alasanRollback,
 
           data:
             updated
@@ -2028,7 +2111,8 @@ export default async function handler(
       .status(400)
       .json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           'Aksi tidak dapat diproses.'
@@ -2048,7 +2132,8 @@ export default async function handler(
       .status(500)
       .json({
 
-        ok: false,
+        ok:
+          false,
 
         error:
           err?.message ||

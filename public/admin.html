@@ -2,6 +2,7 @@
 <html lang="id">
 
 <head>
+
   <meta charset="UTF-8">
 
   <meta
@@ -174,98 +175,98 @@
 >
 
 
-<div
-  class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3"
->
-
-  <h2
-    id="tableTitle"
-    class="text-lg font-bold text-white"
-  >
-    Daftar Data Masuk
-  </h2>
-
-
-  <input
-    type="text"
-    id="searchQuery"
-    oninput="applyTableFilter()"
-    placeholder="Cari Desa / Kecamatan / Petugas..."
-    class="p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
+  <div
+    class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3"
   >
 
-</div>
+    <h2
+      id="tableTitle"
+      class="text-lg font-bold text-white"
+    >
+      Daftar Data Masuk
+    </h2>
+
+
+    <input
+      type="text"
+      id="searchQuery"
+      oninput="applyTableFilter()"
+      placeholder="Cari Desa / Kecamatan / Petugas..."
+      class="p-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+
+  </div>
 
 
 
-<div
-  class="overflow-x-auto"
->
+  <div
+    class="overflow-x-auto"
+  >
 
-<table
-  class="w-full text-left text-sm border-collapse"
->
+    <table
+      class="w-full text-left text-sm border-collapse"
+    >
 
-<thead>
+      <thead>
 
-<tr
-  class="bg-slate-900/50 text-slate-400 border-b border-slate-700"
->
+        <tr
+          class="bg-slate-900/50 text-slate-400 border-b border-slate-700"
+        >
 
-  <th class="p-3">
-    Lokasi
-  </th>
+          <th class="p-3">
+            Lokasi
+          </th>
 
-  <th class="p-3">
-    Petugas
-  </th>
+          <th class="p-3">
+            Petugas
+          </th>
 
-  <th class="p-3 text-center">
-    Perolehan Suara
-  </th>
+          <th class="p-3 text-center">
+            Perolehan Suara
+          </th>
 
-  <th class="p-3 text-center">
-    Total
-  </th>
+          <th class="p-3 text-center">
+            Total
+          </th>
 
-  <th class="p-3 text-center">
-    Status
-  </th>
+          <th class="p-3 text-center">
+            Status
+          </th>
 
-  <th class="p-3 text-center">
-    Foto Plano
-  </th>
+          <th class="p-3 text-center">
+            Foto Plano
+          </th>
 
-  <th class="p-3 text-center">
-    Aksi Admin
-  </th>
+          <th class="p-3 text-center">
+            Aksi Admin
+          </th>
 
-</tr>
+        </tr>
 
-</thead>
+      </thead>
 
 
-<tbody
-  id="adminTableBody"
-  class="divide-y divide-slate-700/50 text-slate-300"
->
+      <tbody
+        id="adminTableBody"
+        class="divide-y divide-slate-700/50 text-slate-300"
+      >
 
-<tr>
+        <tr>
 
-<td
-  colspan="7"
-  class="text-center py-8 text-slate-500"
->
-  Memuat data audit...
-</td>
+          <td
+            colspan="7"
+            class="text-center py-8 text-slate-500"
+          >
+            Memuat data audit...
+          </td>
 
-</tr>
+        </tr>
 
-</tbody>
+      </tbody>
 
-</table>
+    </table>
 
-</div>
+  </div>
 
 </div>
 
@@ -282,261 +283,411 @@
   class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4"
 >
 
+  <div
+    class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
+  >
 
-<div
-  class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
->
 
+    <!-- HEADER -->
 
-<!-- HEADER MODAL -->
-
-<div
-  class="flex justify-between items-center p-5 border-b border-slate-700 shrink-0"
->
-
-  <div>
-
-    <h2
-      class="text-lg font-bold text-white"
+    <div
+      class="flex justify-between items-center p-5 border-b border-slate-700 shrink-0"
     >
-      ✏️ Ubah Data Hasil Suara
-    </h2>
 
-    <p
-      id="editLocation"
-      class="text-xs text-slate-400 mt-1"
+      <div>
+
+        <h2
+          class="text-lg font-bold text-white"
+        >
+          ✏️ Ubah Data Hasil Suara
+        </h2>
+
+        <p
+          id="editLocation"
+          class="text-xs text-slate-400 mt-1"
+        >
+          -
+        </p>
+
+      </div>
+
+
+      <button
+        onclick="closeEditModal()"
+        class="text-slate-400 hover:text-white text-2xl"
+      >
+        ×
+      </button>
+
+    </div>
+
+
+
+    <!-- ISI -->
+
+    <div
+      class="overflow-y-auto p-5"
     >
-      -
-    </p>
+
+      <input
+        type="hidden"
+        id="editId"
+      >
+
+
+      <div
+        class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-5 text-xs text-amber-300"
+      >
+
+        ⚠️ Perubahan angka akan langsung diterapkan
+        ke Livecount dan dicatat dalam audit log.
+
+      </div>
+
+
+
+      <div
+        class="grid grid-cols-1 gap-4"
+      >
+
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1"
+          >
+            Calon 01
+          </label>
+
+          <input
+            id="edit01"
+            type="number"
+            min="0"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+
+        </div>
+
+
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1"
+          >
+            Calon 02
+          </label>
+
+          <input
+            id="edit02"
+            type="number"
+            min="0"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+
+        </div>
+
+
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1"
+          >
+            Calon 03
+          </label>
+
+          <input
+            id="edit03"
+            type="number"
+            min="0"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+
+        </div>
+
+
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1"
+          >
+            Calon 04
+          </label>
+
+          <input
+            id="edit04"
+            type="number"
+            min="0"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+
+        </div>
+
+
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1"
+          >
+            Calon 05
+          </label>
+
+          <input
+            id="edit05"
+            type="number"
+            min="0"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+
+        </div>
+
+
+
+        <div>
+
+          <label
+            class="block text-xs text-slate-400 mb-1"
+          >
+            Suara Tidak Sah
+          </label>
+
+          <input
+            id="editTidakSah"
+            type="number"
+            min="0"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+
+        </div>
+
+
+
+        <div
+          class="bg-slate-900 rounded-xl p-4 border border-slate-700"
+        >
+
+          <div
+            class="flex justify-between items-center"
+          >
+
+            <span
+              class="text-sm text-slate-400"
+            >
+              Total Suara
+            </span>
+
+            <strong
+              id="editTotal"
+              class="text-xl text-white"
+            >
+              0
+            </strong>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- FOOTER -->
+
+    <div
+      class="p-5 border-t border-slate-700 flex gap-3 shrink-0"
+    >
+
+      <button
+        onclick="closeEditModal()"
+        class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm"
+      >
+        Batal
+      </button>
+
+
+      <button
+        onclick="submitEditData()"
+        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-bold text-sm"
+      >
+        💾 Simpan & Sahkan
+      </button>
+
+    </div>
 
   </div>
 
+</div>
 
-  <button
-    onclick="closeEditModal()"
-    class="text-slate-400 hover:text-white text-2xl"
+
+
+<!-- =====================================================
+     MODAL ROLLBACK
+====================================================== -->
+
+<div
+  id="rollbackModal"
+  class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[60] p-4"
+>
+
+  <div
+    class="bg-slate-800 border border-rose-500/40 rounded-2xl shadow-2xl w-full max-w-lg"
   >
-    ×
-  </button>
 
-</div>
 
+    <!-- HEADER -->
 
+    <div
+      class="p-5 border-b border-slate-700"
+    >
 
-<!-- ISI MODAL SCROLL -->
+      <div
+        class="flex justify-between items-start"
+      >
 
-<div
-  class="overflow-y-auto p-5"
->
+        <div>
 
+          <h2
+            class="text-lg font-bold text-white"
+          >
+            ↩️ Rollback Verifikasi
+          </h2>
 
-<input
-  type="hidden"
-  id="editId"
->
+          <p
+            id="rollbackLocation"
+            class="text-xs text-slate-400 mt-1"
+          >
+            -
+          </p>
 
+        </div>
 
-<div
-  class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-5 text-xs text-amber-300"
->
 
-  ⚠️ Perubahan angka akan langsung diterapkan
-  ke Livecount dan dicatat dalam audit log.
+        <button
+          onclick="closeRollbackModal()"
+          class="text-slate-400 hover:text-white text-2xl"
+        >
+          ×
+        </button>
 
-</div>
+      </div>
 
+    </div>
 
 
-<div
-  class="grid grid-cols-1 gap-4"
->
 
+    <!-- ISI -->
 
-<!-- CALON 01 -->
+    <div
+      class="p-5"
+    >
 
-<div>
+      <div
+        class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-5"
+      >
 
-<label
-  class="block text-xs text-slate-400 mb-1"
->
-  Calon 01
-</label>
+        <div
+          class="font-bold text-rose-400 mb-2"
+        >
+          ⚠️ PERHATIAN
+        </div>
 
-<input
-  id="edit01"
-  type="number"
-  min="0"
-  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
->
+        <div
+          class="text-xs text-slate-300 leading-relaxed"
+        >
 
-</div>
+          Rollback akan membuka kembali data yang
+          sebelumnya telah disahkan admin.
 
+          Setelah rollback, data kembali ke status
+          <strong class="text-amber-400">
+            MEMERLUKAN VERIFIKASI ADMIN
+          </strong>
 
+          dan dapat diaudit atau dikoreksi kembali.
 
-<!-- CALON 02 -->
+          Tindakan ini akan dicatat permanen dalam
+          audit log.
 
-<div>
+        </div>
 
-<label
-  class="block text-xs text-slate-400 mb-1"
->
-  Calon 02
-</label>
+      </div>
 
-<input
-  id="edit02"
-  type="number"
-  min="0"
-  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
->
 
-</div>
 
+      <label
+        for="rollbackReason"
+        class="block text-sm font-bold text-slate-300 mb-2"
+      >
 
+        Alasan Rollback
+        <span class="text-rose-400">
+          *
+        </span>
 
-<!-- CALON 03 -->
+      </label>
 
-<div>
 
-<label
-  class="block text-xs text-slate-400 mb-1"
->
-  Calon 03
-</label>
+      <textarea
+        id="rollbackReason"
+        rows="5"
+        maxlength="500"
+        placeholder="Contoh: Ditemukan ketidaksesuaian angka calon 02 dengan foto plano. Data perlu diperiksa kembali."
+        class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white resize-none focus:outline-none focus:ring-2 focus:ring-rose-500"
+      ></textarea>
 
-<input
-  id="edit03"
-  type="number"
-  min="0"
-  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
->
 
-</div>
+      <div
+        class="flex justify-between mt-2"
+      >
 
+        <span
+          class="text-xs text-slate-500"
+        >
+          Minimal 5 karakter
+        </span>
 
+        <span
+          id="rollbackCharCount"
+          class="text-xs text-slate-500"
+        >
+          0 / 500
+        </span>
 
-<!-- CALON 04 -->
+      </div>
 
-<div>
+    </div>
 
-<label
-  class="block text-xs text-slate-400 mb-1"
->
-  Calon 04
-</label>
 
-<input
-  id="edit04"
-  type="number"
-  min="0"
-  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
->
 
-</div>
+    <!-- FOOTER -->
 
+    <div
+      class="p-5 border-t border-slate-700 flex gap-3"
+    >
 
+      <button
+        onclick="closeRollbackModal()"
+        class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm"
+      >
+        Batal
+      </button>
 
-<!-- CALON 05 -->
 
-<div>
+      <button
+        onclick="submitRollback()"
+        class="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-4 py-3 rounded-lg font-bold text-sm"
+      >
+        ↩️ Lakukan Rollback
+      </button>
 
-<label
-  class="block text-xs text-slate-400 mb-1"
->
-  Calon 05
-</label>
+    </div>
 
-<input
-  id="edit05"
-  type="number"
-  min="0"
-  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
->
-
-</div>
-
-
-
-<!-- TIDAK SAH -->
-
-<div>
-
-<label
-  class="block text-xs text-slate-400 mb-1"
->
-  Suara Tidak Sah
-</label>
-
-<input
-  id="editTidakSah"
-  type="number"
-  min="0"
-  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
->
-
-</div>
-
-
-
-<!-- TOTAL -->
-
-<div
-  class="bg-slate-900 rounded-xl p-4 border border-slate-700"
->
-
-<div
-  class="flex justify-between items-center"
->
-
-<span
-  class="text-sm text-slate-400"
->
-  Total Suara
-</span>
-
-<strong
-  id="editTotal"
-  class="text-xl text-white"
->
-  0
-</strong>
-
-</div>
-
-</div>
-
-
-</div>
-
-</div>
-
-
-
-<!-- FOOTER MODAL -->
-
-<div
-  class="p-5 border-t border-slate-700 flex gap-3 shrink-0"
->
-
-<button
-  onclick="closeEditModal()"
-  class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm"
->
-  Batal
-</button>
-
-
-<button
-  onclick="submitEditData()"
-  class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-lg font-bold text-sm"
->
-  💾 Simpan & Sahkan
-</button>
-
-</div>
-
-
-</div>
+  </div>
 
 </div>
 
@@ -550,10 +701,10 @@
   class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500"
 >
 
-<p>
-  &copy; 2026 brengos ntd.
-  Sistem Pengamanan & Audit Pilkades Polres Wonosobo.
-</p>
+  <p>
+    &copy; 2026 brengos ntd.
+    Sistem Pengamanan & Audit Pilkades Polres Wonosobo.
+  </p>
 
 </footer>
 
@@ -561,10 +712,64 @@
 
 <script>
 
+/*
+=========================================================
+GLOBAL
+=========================================================
+*/
+
 let globalData = [];
 
 let currentFilter = 'PENDING';
 
+let rollbackTargetId = null;
+
+
+/*
+=========================================================
+STATUS FINAL / TERKUNCI
+=========================================================
+*/
+
+const STATUS_FINAL = 'VERIFIED_BY_ADMIN';
+
+
+/*
+=========================================================
+STATUS PENDING
+=========================================================
+*/
+
+const PENDING_STATUSES = [
+
+  'PLANO TIDAK SESUAI',
+
+  'FOTO PLANO BELUM TERVERIFIKASI',
+
+  'MEMERLUKAN VERIFIKASI ADMIN',
+
+  'PENDING'
+
+];
+
+
+/*
+=========================================================
+STATUS VERIFIED
+=========================================================
+*/
+
+const VERIFIED_STATUSES = [
+
+  'AUTO VERIFIED',
+
+  'AUTO_VERIFIED',
+
+  'EDITED_BY_SAKSI',
+
+  'VERIFIED_BY_ADMIN'
+
+];
 
 
 /*
@@ -575,40 +780,63 @@ LOAD
 
 document.addEventListener(
   'DOMContentLoaded',
-  async()=>{
+  async () => {
 
-    const res =
-      await fetch(
-        '/api/admin-auth'
+    try {
+
+      const res =
+        await fetch(
+          '/api/admin-auth',
+          {
+            credentials: 'include'
+          }
+        );
+
+
+      if (!res.ok) {
+
+        window.location = '/login';
+
+        return;
+
+      }
+
+
+      const result =
+        await res.json();
+
+
+      document
+        .getElementById(
+          'adminNameDisplay'
+        )
+        .innerText =
+          `Logged as: ${result.admin.nama}`;
+
+
+      fetchAdminData();
+
+
+      setInterval(
+        fetchAdminData,
+        10000
       );
 
-    if(!res.ok){
 
-      window.location='/login';
+    } catch (error) {
 
-      return;
+      console.error(
+        'AUTH ERROR:',
+        error
+      );
+
+      window.location = '/login';
 
     }
 
-    const result =
-      await res.json();
-
-    document
-      .getElementById(
-        'adminNameDisplay'
-      )
-      .innerText=
-      `Logged as: ${result.admin.nama}`;
-
-    fetchAdminData();
-
-    setInterval(
-      fetchAdminData,
-      10000
-    );
-
   }
 );
+
 
 /*
 =========================================================
@@ -621,7 +849,12 @@ async function fetchAdminData() {
   try {
 
     const res =
-      await fetch('/api/get-data');
+      await fetch(
+        '/api/get-data',
+        {
+          credentials: 'include'
+        }
+      );
 
 
     const rawText =
@@ -629,6 +862,7 @@ async function fetchAdminData() {
 
 
     let result;
+
 
     try {
 
@@ -673,14 +907,13 @@ async function fetchAdminData() {
   } catch (err) {
 
     console.error(
-      "GAGAL MEMUAT DATA ADMIN:",
+      'GAGAL MEMUAT DATA ADMIN:',
       err
     );
 
   }
 
 }
-
 
 
 /*
@@ -697,11 +930,16 @@ async function callAdminApi(
     await fetch(
       '/api/admin-verifikasi',
       {
+
         method: 'POST',
 
+        credentials: 'include',
+
         headers: {
+
           'Content-Type':
             'application/json'
+
         },
 
         body:
@@ -710,12 +948,6 @@ async function callAdminApi(
       }
     );
 
-
-  /*
-  -------------------------------------------------------
-  Jangan langsung res.json()
-  -------------------------------------------------------
-  */
 
   const rawText =
     await res.text();
@@ -748,10 +980,24 @@ async function callAdminApi(
 
   if (!res.ok || !result?.ok) {
 
-    throw new Error(
-      result?.error ||
-      `Gagal memproses permintaan. HTTP ${res.status}`
-    );
+    const error =
+      new Error(
+        result?.error ||
+        `Gagal memproses permintaan. HTTP ${res.status}`
+      );
+
+
+    error.code =
+      result?.code ||
+      null;
+
+
+    error.status_verifikasi =
+      result?.status_verifikasi ||
+      null;
+
+
+    throw error;
 
   }
 
@@ -761,10 +1007,25 @@ async function callAdminApi(
 }
 
 
+/*
+=========================================================
+CEK DATA TERKUNCI
+=========================================================
+*/
+
+function isDataLocked(item) {
+
+  return (
+    item?.status_verifikasi ===
+    STATUS_FINAL
+  );
+
+}
+
 
 /*
 =========================================================
-VERIFY
+ADMIN VERIFY
 =========================================================
 */
 
@@ -785,6 +1046,31 @@ async function adminVerify(
 
     alert(
       'Data TPS tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  JIKA DATA FINAL
+  -------------------------------------------------------
+  */
+
+  if (
+    isDataLocked(item) &&
+    action !== 'ROLLBACK_VERIFIKASI'
+  ) {
+
+    alert(
+      '🔒 DATA SUDAH TERKUNCI.\n\n' +
+      'Data ini sudah VERIFIED_BY_ADMIN.\n\n' +
+      'Sahkan Manual, Sahkan Plano, dan Ubah Data ' +
+      'tidak dapat dilakukan.\n\n' +
+      'Jika perlu pemeriksaan ulang, lakukan ' +
+      'Rollback Verifikasi terlebih dahulu.'
     );
 
     return;
@@ -852,9 +1138,10 @@ async function adminVerify(
 
       `Perhatian:\n` +
 
-      `Sistem akan memeriksa confidence OCR.\n` +
+      `Sistem akan memeriksa confidence OCR.\n\n` +
 
-      `Jika confidence rendah, angka tidak akan diubah.\n\n` +
+      `Jika valid, angka OCR akan diterapkan ` +
+      `dan data menjadi VERIFIED_BY_ADMIN.\n\n` +
 
       `Lanjutkan?`;
 
@@ -863,7 +1150,7 @@ async function adminVerify(
 
   /*
   -------------------------------------------------------
-  ROLLBACK VERIFIKASI
+  ROLLBACK
   -------------------------------------------------------
   */
 
@@ -872,17 +1159,47 @@ async function adminVerify(
     'ROLLBACK_VERIFIKASI'
   ) {
 
-    pesan =
-      `Rollback status verifikasi?\n\n` +
+    if (!isDataLocked(item)) {
 
-      `Desa: ${item.desa || '-'}\n` +
+      alert(
+        'Rollback hanya dapat dilakukan terhadap ' +
+        'data yang sudah VERIFIED_BY_ADMIN.'
+      );
 
-      `TPS: ${item.tps || '-'}\n\n` +
+      return;
 
-      `Data yang sudah diverifikasi akan dikembalikan ke status MEMERLUKAN VERIFIKASI ADMIN. Setelah rollback, data dapat diaudit dan dikoreksi kembali.`;
+    }
+
+
+    openRollbackModal(item.id);
+
+    return;
 
   }
 
+
+  /*
+  -------------------------------------------------------
+  ACTION TIDAK DIKENAL
+  -------------------------------------------------------
+  */
+
+  else {
+
+    alert(
+      'Aksi admin tidak dikenali.'
+    );
+
+    return;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  KONFIRMASI
+  -------------------------------------------------------
+  */
 
   if (!confirm(pesan)) {
 
@@ -890,6 +1207,12 @@ async function adminVerify(
 
   }
 
+
+  /*
+  -------------------------------------------------------
+  KIRIM
+  -------------------------------------------------------
+  */
 
   try {
 
@@ -909,7 +1232,10 @@ async function adminVerify(
         action,
 
         admin_nama:
-          adminNama
+          adminNama,
+
+        rollback_reason:
+          null
 
       });
 
@@ -940,45 +1266,408 @@ async function adminVerify(
 }
 
 
+/*
+=========================================================
+OPEN ROLLBACK MODAL
+=========================================================
+*/
+
+function openRollbackModal(
+  id
+) {
+
+  const item =
+    globalData.find(
+      d =>
+        String(d.id) ===
+        String(id)
+    );
+
+
+  if (!item) {
+
+    alert(
+      'Data TPS tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  if (!isDataLocked(item)) {
+
+    alert(
+      'Data belum berstatus VERIFIED_BY_ADMIN.'
+    );
+
+    return;
+
+  }
+
+
+  rollbackTargetId =
+    item.id;
+
+
+  document.getElementById(
+    'rollbackLocation'
+  ).innerText =
+    `${item.kecamatan || '-'} / ` +
+    `${item.desa || '-'} / ` +
+    `TPS ${item.tps || '-'}`;
+
+
+  document.getElementById(
+    'rollbackReason'
+  ).value =
+    '';
+
+
+  updateRollbackCharCount();
+
+
+  const modal =
+    document.getElementById(
+      'rollbackModal'
+    );
+
+
+  modal.classList.remove(
+    'hidden'
+  );
+
+
+  modal.classList.add(
+    'flex'
+  );
+
+
+  setTimeout(
+    () => {
+
+      document
+        .getElementById(
+          'rollbackReason'
+        )
+        .focus();
+
+    },
+    100
+  );
+
+}
+
 
 /*
 =========================================================
-UPDATE TAB
+CLOSE ROLLBACK MODAL
+=========================================================
+*/
+
+function closeRollbackModal() {
+
+  const modal =
+    document.getElementById(
+      'rollbackModal'
+    );
+
+
+  modal.classList.add(
+    'hidden'
+  );
+
+
+  modal.classList.remove(
+    'flex'
+  );
+
+
+  rollbackTargetId =
+    null;
+
+
+  document.getElementById(
+    'rollbackReason'
+  ).value =
+    '';
+
+
+  updateRollbackCharCount();
+
+}
+
+
+/*
+=========================================================
+CHAR COUNT ROLLBACK
+=========================================================
+*/
+
+function updateRollbackCharCount() {
+
+  const textarea =
+    document.getElementById(
+      'rollbackReason'
+    );
+
+
+  const counter =
+    document.getElementById(
+      'rollbackCharCount'
+    );
+
+
+  const length =
+    textarea.value.length;
+
+
+  counter.innerText =
+    `${length} / 500`;
+
+
+  if (length < 5) {
+
+    counter.className =
+      'text-xs text-rose-400';
+
+  } else {
+
+    counter.className =
+      'text-xs text-emerald-400';
+
+  }
+
+}
+
+
+/*
+=========================================================
+LISTENER ROLLBACK TEXTAREA
+=========================================================
+*/
+
+document
+  .getElementById(
+    'rollbackReason'
+  )
+  .addEventListener(
+    'input',
+    updateRollbackCharCount
+  );
+
+
+/*
+=========================================================
+SUBMIT ROLLBACK
+=========================================================
+*/
+
+async function submitRollback() {
+
+  if (!rollbackTargetId) {
+
+    alert(
+      'Target rollback tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  const reason =
+    document
+      .getElementById(
+        'rollbackReason'
+      )
+      .value
+      .trim();
+
+
+  /*
+  -------------------------------------------------------
+  VALIDASI ALASAN
+  -------------------------------------------------------
+  */
+
+  if (!reason) {
+
+    alert(
+      'Alasan rollback wajib diisi.'
+    );
+
+    document
+      .getElementById(
+        'rollbackReason'
+      )
+      .focus();
+
+    return;
+
+  }
+
+
+  if (reason.length < 5) {
+
+    alert(
+      'Alasan rollback minimal 5 karakter.'
+    );
+
+    document
+      .getElementById(
+        'rollbackReason'
+      )
+      .focus();
+
+    return;
+
+  }
+
+
+  const item =
+    globalData.find(
+      d =>
+        String(d.id) ===
+        String(rollbackTargetId)
+    );
+
+
+  if (!item) {
+
+    alert(
+      'Data TPS tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  if (!isDataLocked(item)) {
+
+    alert(
+      'Data sudah tidak dalam keadaan terkunci.'
+    );
+
+    closeRollbackModal();
+
+    await fetchAdminData();
+
+    return;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  KONFIRMASI AKHIR
+  -------------------------------------------------------
+  */
+
+  const konfirmasi =
+    confirm(
+
+      `KONFIRMASI ROLLBACK\n\n` +
+
+      `Desa: ${item.desa || '-'}\n` +
+
+      `TPS: ${item.tps || '-'}\n\n` +
+
+      `Alasan:\n` +
+
+      `${reason}\n\n` +
+
+      `Data akan dikembalikan ke:\n` +
+
+      `MEMERLUKAN VERIFIKASI ADMIN\n\n` +
+
+      `Lanjutkan rollback?`
+
+    );
+
+
+  if (!konfirmasi) {
+
+    return;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  KIRIM API
+  -------------------------------------------------------
+  */
+
+  try {
+
+    const adminNama =
+      localStorage.getItem(
+        'adminNama'
+      ) ||
+      'Admin';
+
+
+    const result =
+      await callAdminApi({
+
+        id:
+          rollbackTargetId,
+
+        action:
+          'ROLLBACK_VERIFIKASI',
+
+        admin_nama:
+          adminNama,
+
+        rollback_reason:
+          reason
+
+      });
+
+
+    alert(
+      result.message ||
+      'Rollback berhasil.'
+    );
+
+
+    closeRollbackModal();
+
+
+    await fetchAdminData();
+
+
+  } catch (err) {
+
+    console.error(
+      'ROLLBACK ERROR:',
+      err
+    );
+
+
+    alert(
+      `Gagal: ${err.message}`
+    );
+
+  }
+
+}
+
+
+/*
+=========================================================
+UPDATE TAB COUNTS
 =========================================================
 */
 
 function updateTabCounts() {
 
-  const pendingStatuses = [
-
-    'PLANO TIDAK SESUAI',
-
-    'FOTO PLANO BELUM TERVERIFIKASI',
-
-    'MEMERLUKAN VERIFIKASI ADMIN',
-
-    'PENDING'
-
-  ];
-
-
-  const verifiedStatuses = [
-
-    'AUTO VERIFIED',
-
-    'AUTO_VERIFIED',
-
-    'EDITED_BY_SAKSI',
-
-    'VERIFIED_BY_ADMIN'
-
-  ];
-
-
   const pendingCount =
     globalData.filter(
       d =>
-        pendingStatuses.includes(
+        PENDING_STATUSES.includes(
           d.status_verifikasi
         )
     ).length;
@@ -987,36 +1676,35 @@ function updateTabCounts() {
   const verifiedCount =
     globalData.filter(
       d =>
-        verifiedStatuses.includes(
+        VERIFIED_STATUSES.includes(
           d.status_verifikasi
         )
     ).length;
 
 
   document.getElementById(
-    "countPending"
+    'countPending'
   ).innerText =
     `${pendingCount} TPS`;
 
 
   document.getElementById(
-    "countVerified"
+    'countVerified'
   ).innerText =
     `${verifiedCount} TPS`;
 
 
   document.getElementById(
-    "countAll"
+    'countAll'
   ).innerText =
     `${globalData.length} TPS`;
 
 }
 
 
-
 /*
 =========================================================
-FILTER
+FILTER STATUS
 =========================================================
 */
 
@@ -1032,7 +1720,6 @@ function setFilterStatus(
 }
 
 
-
 /*
 =========================================================
 APPLY FILTER
@@ -1042,37 +1729,12 @@ APPLY FILTER
 function applyTableFilter() {
 
   const search =
-    document.getElementById(
-      "searchQuery"
-    )
-    .value
-    .toLowerCase();
-
-
-  const pendingStatuses = [
-
-    'PLANO TIDAK SESUAI',
-
-    'FOTO PLANO BELUM TERVERIFIKASI',
-
-    'MEMERLUKAN VERIFIKASI ADMIN',
-
-    'PENDING'
-
-  ];
-
-
-  const verifiedStatuses = [
-
-    'AUTO VERIFIED',
-
-    'AUTO_VERIFIED',
-
-    'EDITED_BY_SAKSI',
-
-    'VERIFIED_BY_ADMIN'
-
-  ];
+    document
+      .getElementById(
+        'searchQuery'
+      )
+      .value
+      .toLowerCase();
 
 
   const filtered =
@@ -1116,7 +1778,7 @@ function applyTableFilter() {
           'PENDING'
         ) {
 
-          return pendingStatuses.includes(
+          return PENDING_STATUSES.includes(
             item.status_verifikasi
           );
 
@@ -1128,7 +1790,7 @@ function applyTableFilter() {
           'VERIFIED'
         ) {
 
-          return verifiedStatuses.includes(
+          return VERIFIED_STATUSES.includes(
             item.status_verifikasi
           );
 
@@ -1148,7 +1810,6 @@ function applyTableFilter() {
 }
 
 
-
 /*
 =========================================================
 STATUS BADGE
@@ -1165,18 +1826,30 @@ function statusBadge(
 
 
   if (
-    [
-      'VERIFIED_BY_ADMIN',
-      'AUTO VERIFIED',
-      'AUTO_VERIFIED',
-      'EDITED_BY_SAKSI'
-    ].includes(s)
+    s ===
+    STATUS_FINAL
   ) {
 
     return `
-      <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold">
-        ${escapeHtml(s)}
-      </span>
+
+      <div
+        class="inline-flex flex-col items-center gap-1"
+      >
+
+        <span
+          class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold"
+        >
+          🔒 VERIFIED_BY_ADMIN
+        </span>
+
+        <span
+          class="text-[10px] text-emerald-400"
+        >
+          DATA TERKUNCI
+        </span>
+
+      </div>
+
     `;
 
   }
@@ -1184,30 +1857,53 @@ function statusBadge(
 
   if (
     [
-      'PLANO TIDAK SESUAI',
-      'FOTO PLANO BELUM TERVERIFIKASI',
-      'MEMERLUKAN VERIFIKASI ADMIN',
-      'PENDING'
+      'AUTO VERIFIED',
+      'AUTO_VERIFIED',
+      'EDITED_BY_SAKSI'
     ].includes(s)
   ) {
 
     return `
-      <span class="px-2 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-xs font-bold">
+
+      <span
+        class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold"
+      >
         ${escapeHtml(s)}
       </span>
+
+    `;
+
+  }
+
+
+  if (
+    PENDING_STATUSES.includes(s)
+  ) {
+
+    return `
+
+      <span
+        class="px-2 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-xs font-bold"
+      >
+        ${escapeHtml(s)}
+      </span>
+
     `;
 
   }
 
 
   return `
-    <span class="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs font-bold">
+
+    <span
+      class="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs font-bold"
+    >
       ${escapeHtml(s)}
     </span>
+
   `;
 
 }
-
 
 
 /*
@@ -1222,15 +1918,17 @@ function renderAdminTable(
 
   const tbody =
     document.getElementById(
-      "adminTableBody"
+      'adminTableBody'
     );
 
 
-  tbody.innerHTML = "";
+  tbody.innerHTML =
+    '';
 
 
   if (
-    data.length === 0
+    data.length ===
+    0
   ) {
 
     tbody.innerHTML = `
@@ -1256,12 +1954,17 @@ function renderAdminTable(
   data.forEach(
     item => {
 
+      const locked =
+        isDataLocked(item);
+
+
       const photoLink =
         item.google_drive_url
 
           ?
 
         `
+
           <a
             href="${escapeAttribute(item.google_drive_url)}"
             target="_blank"
@@ -1270,17 +1973,120 @@ function renderAdminTable(
           >
             📁 Buka Foto
           </a>
+
         `
 
           :
 
         `
+
           <span
             class="text-slate-500 text-xs italic"
           >
             Belum Ada Foto
           </span>
+
         `;
+
+
+      /*
+      -----------------------------------------------------
+      TOMBOL AKSI
+      -----------------------------------------------------
+      */
+
+      let actionHtml = '';
+
+
+      if (locked) {
+
+        /*
+        ===================================================
+        DATA TERKUNCI
+        ===================================================
+        */
+
+        actionHtml = `
+
+          <div
+            class="flex flex-col gap-2 min-w-[190px]"
+          >
+
+            <div
+              class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-center"
+            >
+
+              <div
+                class="text-emerald-400 font-bold text-xs"
+              >
+                🔒 DATA TERKUNCI
+              </div>
+
+              <div
+                class="text-[10px] text-slate-400 mt-1"
+              >
+                VERIFIED_BY_ADMIN
+              </div>
+
+            </div>
+
+
+            <button
+              onclick="adminVerify('${item.id}', 'ROLLBACK_VERIFIKASI')"
+              class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+            >
+              ↩️ Rollback Verifikasi
+            </button>
+
+          </div>
+
+        `;
+
+      } else {
+
+        /*
+        ===================================================
+        DATA BELUM FINAL
+        ===================================================
+        */
+
+        actionHtml = `
+
+          <div
+            class="flex flex-col gap-2 min-w-[190px]"
+          >
+
+
+            <button
+              onclick="adminVerify('${item.id}', 'SAHKAN_MANUAL')"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+            >
+              ✅ Sahkan Manual
+            </button>
+
+
+
+            <button
+              onclick="adminVerify('${item.id}', 'SAHKAN_PLANO')"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+            >
+              📊 Sahkan Plano
+            </button>
+
+
+
+            <button
+              onclick="openEditModal('${item.id}')"
+              class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+            >
+              ✏️ Ubah Data
+            </button>
+
+          </div>
+
+        `;
+
+      }
 
 
       tbody.innerHTML += `
@@ -1292,12 +2098,16 @@ function renderAdminTable(
 
           <!-- LOKASI -->
 
-          <td class="p-3">
+          <td
+            class="p-3"
+          >
 
             <strong
               class="text-white"
             >
-              ${escapeHtml(item.desa || '-')}
+              ${escapeHtml(
+                item.desa || '-'
+              )}
             </strong>
 
             <br>
@@ -1305,10 +2115,19 @@ function renderAdminTable(
             <span
               class="text-xs text-slate-400"
             >
+
               Kec.
-              ${escapeHtml(item.kecamatan || '-')}
-              • TPS
-              ${escapeHtml(item.tps || '-')}
+              ${escapeHtml(
+                item.kecamatan || '-'
+              )}
+
+              •
+
+              TPS
+              ${escapeHtml(
+                item.tps || '-'
+              )}
+
             </span>
 
           </td>
@@ -1321,15 +2140,21 @@ function renderAdminTable(
             class="p-3 text-xs"
           >
 
-            ${escapeHtml(item.nama_saksi || '-')}
+            ${escapeHtml(
+              item.nama_saksi || '-'
+            )}
 
             <br>
 
             <span
               class="text-slate-500"
             >
+
               NRP:
-              ${escapeHtml(item.nrp_saksi || '-')}
+              ${escapeHtml(
+                item.nrp_saksi || '-'
+              )}
+
             </span>
 
           </td>
@@ -1370,8 +2195,10 @@ function renderAdminTable(
             <span
               class="text-slate-500"
             >
+
               Tidak Sah:
               ${item.suara_tidak_sah || 0}
+
             </span>
 
           </td>
@@ -1422,54 +2249,7 @@ function renderAdminTable(
             class="p-3 text-center"
           >
 
-            <div
-              class="flex flex-col gap-2 min-w-[170px]"
-            >
-
-
-              <!-- SAHKAN MANUAL -->
-
-              <button
-                onclick="adminVerify('${item.id}', 'SAHKAN_MANUAL')"
-                class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
-              >
-                ✅ Sahkan Manual
-              </button>
-
-
-
-              <!-- SAHKAN PLANO -->
-
-              <button
-                onclick="adminVerify('${item.id}', 'SAHKAN_PLANO')"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
-              >
-                📊 Sahkan Plano
-              </button>
-
-
-
-              <!-- UBAH DATA -->
-
-              <button
-                onclick="openEditModal('${item.id}')"
-                class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
-              >
-                ✏️ Ubah Data
-              </button>
-
-
-
-              <!-- ROLLBACK -->
-
-              <button
-                onclick="adminVerify('${item.id}', 'ROLLBACK_VERIFIKASI')"
-                class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg text-xs font-bold"
-              >
-                ↩️ Rollback Verifikasi
-              </button>
-
-            </div>
+            ${actionHtml}
 
           </td>
 
@@ -1481,7 +2261,6 @@ function renderAdminTable(
   );
 
 }
-
 
 
 /*
@@ -1513,6 +2292,25 @@ function openEditModal(
   }
 
 
+  /*
+  -------------------------------------------------------
+  JANGAN BUKA JIKA TERKUNCI
+  -------------------------------------------------------
+  */
+
+  if (isDataLocked(item)) {
+
+    alert(
+      '🔒 DATA SUDAH TERKUNCI.\n\n' +
+      'Data sudah VERIFIED_BY_ADMIN.\n\n' +
+      'Untuk mengubah data, lakukan Rollback Verifikasi terlebih dahulu.'
+    );
+
+    return;
+
+  }
+
+
   document.getElementById(
     'editId'
   ).value =
@@ -1522,7 +2320,9 @@ function openEditModal(
   document.getElementById(
     'editLocation'
   ).innerText =
-    `${item.kecamatan || '-'} / ${item.desa || '-'} / TPS ${item.tps || '-'}`;
+    `${item.kecamatan || '-'} / ` +
+    `${item.desa || '-'} / ` +
+    `TPS ${item.tps || '-'}`;
 
 
   document.getElementById(
@@ -1564,28 +2364,27 @@ function openEditModal(
   updateEditTotal();
 
 
-  document.getElementById(
-    'editModal'
-  )
-  .classList.remove(
+  const modal =
+    document.getElementById(
+      'editModal'
+    );
+
+
+  modal.classList.remove(
     'hidden'
   );
 
 
-  document.getElementById(
-    'editModal'
-  )
-  .classList.add(
+  modal.classList.add(
     'flex'
   );
 
 }
 
 
-
 /*
 =========================================================
-CLOSE MODAL
+CLOSE EDIT MODAL
 =========================================================
 */
 
@@ -1609,10 +2408,9 @@ function closeEditModal() {
 }
 
 
-
 /*
 =========================================================
-UPDATE TOTAL PREVIEW
+UPDATE TOTAL EDIT
 =========================================================
 */
 
@@ -1660,6 +2458,12 @@ function updateEditTotal() {
 }
 
 
+/*
+=========================================================
+LISTENER INPUT EDIT
+=========================================================
+*/
+
 [
   'edit01',
   'edit02',
@@ -1682,7 +2486,6 @@ function updateEditTotal() {
 );
 
 
-
 /*
 =========================================================
 SUBMIT UBAH DATA
@@ -1692,9 +2495,11 @@ SUBMIT UBAH DATA
 async function submitEditData() {
 
   const id =
-    document.getElementById(
-      'editId'
-    ).value;
+    document
+      .getElementById(
+        'editId'
+      )
+      .value;
 
 
   if (!id) {
@@ -1702,6 +2507,46 @@ async function submitEditData() {
     alert(
       'ID data tidak ditemukan.'
     );
+
+    return;
+
+  }
+
+
+  /*
+  -------------------------------------------------------
+  CEK STATUS TERBARU DARI GLOBAL DATA
+  -------------------------------------------------------
+  */
+
+  const item =
+    globalData.find(
+      d =>
+        String(d.id) ===
+        String(id)
+    );
+
+
+  if (!item) {
+
+    alert(
+      'Data TPS tidak ditemukan.'
+    );
+
+    return;
+
+  }
+
+
+  if (isDataLocked(item)) {
+
+    alert(
+      '🔒 DATA SUDAH TERKUNCI.\n\n' +
+      'Ubah Data tidak dapat dilakukan.\n\n' +
+      'Lakukan Rollback Verifikasi terlebih dahulu.'
+    );
+
+    closeEditModal();
 
     return;
 
@@ -1760,20 +2605,13 @@ async function submitEditData() {
     );
 
 
-  const item =
-    globalData.find(
-      d =>
-        String(d.id) ===
-        String(id)
-    );
-
-
   const pesan =
+
     `Simpan perubahan data?\n\n` +
 
-    `Desa: ${item?.desa || '-'}\n` +
+    `Desa: ${item.desa || '-'}\n` +
 
-    `TPS: ${item?.tps || '-'}\n\n` +
+    `TPS: ${item.tps || '-'}\n\n` +
 
     `01: ${newData.suara_calon_01}\n` +
 
@@ -1820,7 +2658,10 @@ async function submitEditData() {
           adminNama,
 
         data:
-          newData
+          newData,
+
+        rollback_reason:
+          null
 
       });
 
@@ -1852,7 +2693,6 @@ async function submitEditData() {
   }
 
 }
-
 
 
 /*
@@ -1892,6 +2732,11 @@ function escapeHtml(
 }
 
 
+/*
+=========================================================
+ESCAPE ATTRIBUTE
+=========================================================
+*/
 
 function escapeAttribute(
   value
@@ -1920,27 +2765,41 @@ function escapeAttribute(
 }
 
 
-
 /*
 =========================================================
 LOGOUT
 =========================================================
 */
 
-async function logoutAdmin(){
+async function logoutAdmin() {
 
-  await fetch(
-    '/api/admin-logout',
-    {
-      method:'POST'
-    }
-  );
+  try {
 
-  window.location='/login';
+    await fetch(
+      '/api/admin-logout',
+      {
+        method: 'POST',
+        credentials: 'include'
+      }
+    );
+
+  } catch (error) {
+
+    console.error(
+      'LOGOUT ERROR:',
+      error
+    );
+
+  }
+
+
+  window.location =
+    '/login';
 
 }
 
 </script>
 
 </body>
+
 </html>
