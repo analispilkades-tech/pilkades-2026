@@ -28,9 +28,12 @@
           <input type="hidden" id="adminId">
           <label class="block text-xs text-slate-400">NRP<input id="nrp" required maxlength="64" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></label>
           <label class="block text-xs text-slate-400">Nama<input id="nama" required maxlength="160" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></label>
-          <label class="block text-xs text-slate-400">Role<select id="role" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"><option>ADMIN</option><option>SUPERADMIN</option></select></label>
+          <label class="block text-xs text-slate-400">Role<select id="role" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2">
+            <option value="ADMIN_KECAMATAN">ADMIN KECAMATAN</option>
+            <option value="SUPERADMIN">SUPERADMIN</option>
+            </select> </label>
           <label class="block text-xs text-slate-400">PIN <span id="pinHint">(wajib)</span><input id="pin" type="password" inputmode="numeric" maxlength="128" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></label>
-          <label class="block text-xs text-slate-400">Kecamatan (untuk ADMIN)<select id="kecamatan" multiple size="8" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></select></label>
+          <label class="block text-xs text-slate-400">Kecamatan (untuk ADMIN KECAMATAN)<select id="kecamatan" multiple size="8" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></select></label>
           <label class="flex gap-2 items-center text-sm"><input id="aktif" type="checkbox" checked> Aktif</label>
           <div class="flex gap-2"><button class="flex-1 bg-blue-600 px-3 py-2 rounded-lg font-bold text-sm">Simpan</button><button type="button" onclick="resetForm()" class="px-3 py-2 rounded-lg bg-slate-700 text-sm">Batal</button></div>
         </form>
