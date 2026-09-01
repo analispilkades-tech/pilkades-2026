@@ -1,86 +1,30 @@
-import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+import { supabase } from '../lib/supabase.js';
+import { readCookie, sessionTokenHash } from '../lib/admin-session.js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
-
-const SESSION_SECRET = process.env.SESSION_SECRET;
-
-function sha256(text){
-  return crypto
-    .createHash('sha256')
-    .update(text)
-    .digest('hex');
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === (req.headers['x-forwarded-host'] || req.headers.host || ''); }
+  catch { return false; }
 }
 
-function readCookie(req,name){
+export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  if (!sameOrigin(req)) return res.status(403).json({ ok: false, error: 'Origin request tidak diizinkan.' });
 
-  const cookie =
-    req.headers.cookie || '';
-
-  const match =
-    cookie.match(
-      new RegExp(
-        `${name}=([^;]+)`
-      )
-    );
-
-  return match
-    ? match[1]
-    : null;
-}
-
-export default async function handler(req,res){
-
-  try{
-
-    const token =
-      readCookie(
-        req,
-        'admin_session'
-      );
-
-    if(token){
-
-      await supabase
-        .from('admin_sessions')
-        .delete()
-        .eq(
-          'token_hash',
-          sha256(
-            token + SESSION_SECRET
-          )
-        );
-
+  try {
+    const token = readCookie(req);
+    if (token) {
+      await supabase.from('admin_sessions').delete().eq('token_hash', sessionTokenHash(token));
     }
-
-    const secure =
-      process.env.VERCEL
-        ? '; Secure'
-        : '';
-
-    res.setHeader(
-      'Set-Cookie',
-      `admin_session=; HttpOnly; Path=/; SameSite=Lax${secure}; Max-Age=0`
-    );
-
-    return res.status(200).json({
-      ok:true
-    });
-
-  }catch(err){
-
-    console.error(
-      '[ADMIN LOGOUT]',
-      err
-    );
-
-    return res.status(500).json({
-      ok:false
-    });
-
+    const secure = process.env.VERCEL ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `admin_session=; HttpOnly; Path=/; SameSite=Lax${secure}; Max-Age=0`);
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('[ADMIN LOGOUT]', err);
+    return res.status(500).json({ ok: false, error: 'Logout gagal.' });
   }
-
 }

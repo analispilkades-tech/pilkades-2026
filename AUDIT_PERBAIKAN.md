@@ -1,0 +1,71 @@
+# Audit & perbaikan produksi — Pilkades 2026
+
+Tanggal paket: 2026-09-01
+
+## Temuan utama yang diperbaiki
+
+1. **Dua endpoint admin yang tumpang tindih**
+   - `admin-action.js` memiliki action `RESET_VERIFIKASI`, sedangkan alur yang dipakai UI adalah `admin-verifikasi.js` dengan `ROLLBACK_VERIFIKASI`.
+   - Endpoint duplikat dihapus dari paket agar hanya ada satu jalur mutasi admin.
+   - `RESET_VERIFIKASI` tidak lagi menjadi action produksi.
+
+2. **Rollback bukan reset biasa**
+   - `ROLLBACK_VERIFIKASI` hanya boleh dilakukan ketika status tepat `VERIFIED_BY_ADMIN`.
+   - Wajib alasan rollback 5–1000 karakter.
+   - Rollback hanya mengubah status kembali ke `MEMERLUKAN VERIFIKASI ADMIN`; tidak mengembalikan angka secara otomatis.
+   - Audit log menyimpan snapshot sebelum/sesudah dan alasan rollback.
+
+3. **Race condition pada verifikasi**
+   - Mutasi admin dipindahkan ke RPC PostgreSQL `admin_apply_verification_action`.
+   - Target `hasil_suara` dikunci dengan `FOR UPDATE`.
+   - Update + audit log terjadi dalam satu transaksi.
+   - Dua admin yang menekan aksi terhadap TPS yang sama secara bersamaan tidak dapat sama-sama berhasil.
+
+4. **Public Supabase CRUD terlalu terbuka**
+   - Migrasi mencabut privilege `anon` dan `authenticated` pada tabel server-owned.
+   - Policy publik lama dihapus.
+   - Semua akses database aplikasi dilakukan melalui backend dengan server-only Supabase key.
+
+5. **Public dashboard memakai endpoint admin**
+   - `public/index.html` sebelumnya memanggil `/api/get-data`, yang membutuhkan session admin.
+   - Ditambahkan `/api/livecount` sebagai endpoint publik read-only.
+   - `/api/get-data` tetap khusus admin.
+
+6. **Beban query plano pada polling admin**
+   - Sebelumnya seluruh histori `plano_uploads` dibaca lalu difilter di Node.
+   - Ditambahkan view `latest_plano_uploads` dan query batch berdasarkan ID TPS.
+   - Histori plano tidak lagi diunduh penuh setiap refresh admin.
+
+7. **Webhook Telegram duplicate update**
+   - Ditambahkan tabel `telegram_updates` untuk mencegah `update_id` yang sama diproses dua kali.
+   - Retensi dedupe 30 hari dijaga dari webhook.
+   - Dukungan `TELEGRAM_WEBHOOK_SECRET` ditambahkan.
+
+8. **Session/cookie hardening**
+   - Parsing cookie diperbaiki.
+   - Cookie tetap `HttpOnly`, `SameSite=Lax`, dan `Secure` pada Vercel.
+   - Endpoint mutasi admin/login/logout memeriksa Origin ketika header tersedia.
+   - Response admin memakai `no-store` dan security headers.
+
+9. **PIN admin**
+   - Ditambahkan migrasi `pin_hash` menggunakan bcrypt via `pgcrypto`.
+   - Login sekarang memverifikasi `pin_hash` melalui RPC dan tidak lagi mengambil plaintext PIN dari database.
+   - Kolom plaintext `pin` sengaja belum dihapus otomatis agar tidak merusak sistem eksternal; hapus setelah dipastikan tidak digunakan.
+
+10. **XSS pada live dashboard**
+    - Nilai database yang dirender ke HTML pada `public/index.html` di-escape.
+    - Log ticker menggunakan `textContent`.
+
+## Validasi yang dijalankan
+
+- Semua file backend JavaScript lulus `node --check`.
+- Semua inline JavaScript pada `index.html`, `login.html`, dan `admin.html` lulus `node --check`.
+- Tidak ada browser/public file yang mengimpor Supabase.
+- `RESET_VERIFIKASI` tidak lagi digunakan dalam action production.
+- UI admin tetap memanggil `/api/admin-verifikasi` sebagai endpoint mutasi tunggal.
+
+## Catatan penting
+
+Paket kode membutuhkan dua migrasi Supabase sebelum deployment final. Lihat `DEPLOYMENT.md` untuk urutan dan environment variable.
+
+Paket sumber ZIP awal yang dianalisis berisi 14 file, bukan 17 file. Audit dilakukan terhadap seluruh isi ZIP tersebut; file tambahan di paket perbaikan adalah hasil hardening dan pemisahan endpoint.

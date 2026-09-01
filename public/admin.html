@@ -65,6 +65,15 @@
       </span>
 
 
+      <a
+        id="superadminLink"
+        href="/superadmin"
+        class="hidden bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition"
+      >
+        Superadmin
+      </a>
+
+
       <button
         onclick="logoutAdmin()"
         class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition"
@@ -812,6 +821,10 @@ document.addEventListener(
         )
         .innerText =
           `Logged as: ${result.admin.nama}`;
+
+      if (['SUPERADMIN', 'SUPER_ADMIN'].includes(String(result.admin.role || '').toUpperCase())) {
+        document.getElementById('superadminLink').classList.remove('hidden');
+      }
 
 
       fetchAdminData();

@@ -167,12 +167,21 @@
   </footer>
 
   <script>
-    const API_URL = "/api/get-data";
+    const API_URL = "/api/livecount";
     
     let rawData = [];
     let globalMasterDesa = [];
     let logIndex = 0;
     let logList = [];
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\'/g, '&#039;');
+    }
 
     async function loadLiveData() {
       try {
@@ -199,7 +208,7 @@
       const kecList = [...new Set(dataSource.map(item => String(item.kecamatan || '').trim()).filter(Boolean))].sort();
 
       kecSelect.innerHTML = '<option value="">-- Pilih Kecamatan --</option>' + 
-        kecList.map(k => `<option value="${k}" ${k.toUpperCase() === currentKec.toUpperCase() ? 'selected' : ''}>${k}</option>`).join('');
+        kecList.map(k => `<option value="${escapeHtml(k)}" ${k.toUpperCase() === currentKec.toUpperCase() ? 'selected' : ''}>${escapeHtml(k)}</option>`).join('');
     }
 
     function onKecChange() {
@@ -236,7 +245,7 @@
 
       const desaList = [...new Set(filtered.map(item => String(item.desa || '').trim()).filter(Boolean))].sort();
       desaSelect.innerHTML = '<option value="">-- Pilih Desa --</option>' + 
-        desaList.map(d => `<option value="${d}" ${d.toUpperCase() === currentDesa.toUpperCase() ? 'selected' : ''}>${d}</option>`).join('');
+        desaList.map(d => `<option value="${escapeHtml(d)}" ${d.toUpperCase() === currentDesa.toUpperCase() ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('');
     }
 
     function onDesaChange() {
@@ -270,7 +279,7 @@
 
       const tpsList = [...new Set(filtered.map(item => String(item.tps || '').trim()).filter(Boolean))].sort((a,b) => Number(a) - Number(b));
       tpsSelect.innerHTML = '<option value="">-- Pilih TPS --</option>' + 
-        tpsList.map(t => `<option value="${t}" ${t.toUpperCase() === currentTPS.toUpperCase() ? 'selected' : ''}>${t}</option>`).join('');
+        tpsList.map(t => `<option value="${escapeHtml(t)}" ${t.toUpperCase() === currentTPS.toUpperCase() ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
     }
 
     function applyFilters() {
@@ -416,10 +425,10 @@
 
         tbody.innerHTML += `
           <tr class="hover:bg-slate-700/30 transition">
-            <td class="p-3">${item.kecamatan || '-'}</td>
-            <td class="p-3 font-semibold text-white">${item.desa || '-'}</td>
-            <td class="p-3 font-bold text-blue-400">${item.tps || '-'}</td>
-            <td class="p-3">${item.nama_saksi || '-'} <span class="text-slate-500 text-xs">(${item.nrp_saksi || '-'})</span></td>
+            <td class="p-3">${escapeHtml(item.kecamatan || '-')}</td>
+            <td class="p-3 font-semibold text-white">${escapeHtml(item.desa || '-')}</td>
+            <td class="p-3 font-bold text-blue-400">${escapeHtml(item.tps || '-')}</td>
+            <td class="p-3">${escapeHtml(item.nama_saksi || '-')} <span class="text-slate-500 text-xs">(${escapeHtml(item.nrp_saksi || '-')})</span></td>
             <td class="p-3 text-center font-bold text-indigo-400">${c1}</td>
             <td class="p-3 text-center font-bold text-amber-400">${c2}</td>
             <td class="p-3 text-center font-bold text-emerald-400">${c3}</td>
@@ -429,7 +438,7 @@
             <td class="p-3 text-center font-extrabold text-white">${item.total_suara_masuk || 0}</td>
             <td class="p-3 text-center">
               <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold">
-                ${item.status_verifikasi || 'AUTO_VERIFIED'}
+                ${escapeHtml(item.status_verifikasi || 'AUTO_VERIFIED')}
               </span>
             </td>
           </tr>
@@ -458,7 +467,7 @@
       }
 
       logList = recentData.map(item => {
-        return `TPS ${item.tps || '-'} Desa ${item.desa || '-'} Kec. ${item.kecamatan || '-'} data masuk oleh ${item.nama_saksi || 'Petugas'}`;
+        return `TPS ${escapeHtml(item.tps || '-')} Desa ${escapeHtml(item.desa || '-')} Kec. ${escapeHtml(item.kecamatan || '-')} data masuk oleh ${escapeHtml(item.nama_saksi || 'Petugas')}`;
       });
     }
 
@@ -470,7 +479,7 @@
       
       tickerContainer.classList.remove("animate-log-item");
       void tickerContainer.offsetWidth;
-      tickerContainer.innerHTML = currentLog;
+      tickerContainer.textContent = currentLog;
       tickerContainer.classList.add("animate-log-item");
 
       logIndex = (logIndex + 1) % logList.length;

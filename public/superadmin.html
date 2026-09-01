@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Superadmin - PILKADES 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <header class="bg-slate-800 border-b border-slate-700 p-4">
+    <div class="max-w-6xl mx-auto flex justify-between items-center gap-4">
+      <div><div class="text-xs text-blue-400 font-bold uppercase">PILKADES 2026</div><h1 class="text-xl font-extrabold">SUPERADMIN — MANAJEMEN ADMIN</h1></div>
+      <div class="flex gap-2 items-center"><a href="/admin" class="px-3 py-2 rounded bg-slate-700 text-xs font-bold">← Audit</a><button onclick="logout()" class="px-3 py-2 rounded bg-rose-600 text-xs font-bold">Logout</button></div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4 md:p-6">
+    <div id="message" class="hidden mb-4 p-3 rounded-lg text-sm"></div>
+    <div class="grid lg:grid-cols-[1fr_380px] gap-6">
+      <section class="bg-slate-800 border border-slate-700 rounded-2xl p-5 overflow-auto">
+        <div class="flex justify-between items-center mb-4"><div><h2 class="font-bold">Daftar Admin</h2><p class="text-xs text-slate-400">Kelola NRP, role, status dan wilayah akses.</p></div><button onclick="openCreate()" class="bg-emerald-600 px-3 py-2 rounded-lg text-xs font-bold">+ Tambah Admin</button></div>
+        <table class="w-full text-sm"><thead class="text-slate-400 border-b border-slate-700"><tr><th class="text-left p-2">NRP</th><th class="text-left p-2">Nama</th><th class="text-left p-2">Role</th><th class="text-left p-2">Wilayah</th><th class="p-2">Status</th><th class="p-2">Aksi</th></tr></thead><tbody id="rows"></tbody></table>
+      </section>
+
+      <section class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+        <h2 id="formTitle" class="font-bold mb-1">Tambah Admin</h2><p class="text-xs text-slate-400 mb-4">PIN hanya dikirim ke server dan disimpan sebagai hash bcrypt. Jangan pernah menampilkan PIN di tabel.</p>
+        <form id="form" onsubmit="saveAdmin(event)" class="space-y-3">
+          <input type="hidden" id="adminId">
+          <label class="block text-xs text-slate-400">NRP<input id="nrp" required maxlength="64" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></label>
+          <label class="block text-xs text-slate-400">Nama<input id="nama" required maxlength="160" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></label>
+          <label class="block text-xs text-slate-400">Role<select id="role" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"><option>ADMIN</option><option>SUPERADMIN</option></select></label>
+          <label class="block text-xs text-slate-400">PIN <span id="pinHint">(wajib)</span><input id="pin" type="password" inputmode="numeric" maxlength="128" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></label>
+          <label class="block text-xs text-slate-400">Kecamatan (untuk ADMIN)<select id="kecamatan" multiple size="8" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-2"></select></label>
+          <label class="flex gap-2 items-center text-sm"><input id="aktif" type="checkbox" checked> Aktif</label>
+          <div class="flex gap-2"><button class="flex-1 bg-blue-600 px-3 py-2 rounded-lg font-bold text-sm">Simpan</button><button type="button" onclick="resetForm()" class="px-3 py-2 rounded-lg bg-slate-700 text-sm">Batal</button></div>
+        </form>
+      </section>
+    </div>
+  </main>
+<script>
+let admins=[];
+const $=id=>document.getElementById(id);
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function msg(text,error=false){const x=$('message');x.textContent=text;x.className=`mb-4 p-3 rounded-lg text-sm ${error?'bg-rose-900/40 text-rose-300':'bg-emerald-900/40 text-emerald-300'}`;}
+async function api(action,payload={}){const r=await fetch('/api/superadmin-manage',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...payload})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);return j;}
+async function load(){try{const a=await fetch('/api/admin-auth',{credentials:'include'});const j=await a.json();if(!a.ok) return location='/login';if(!['SUPERADMIN','SUPER_ADMIN'].includes(String(j.admin.role).toUpperCase())) return location='/admin';const [ad,reg]=await Promise.all([api('LIST_ADMINS'),api('LIST_KECAMATAN')]);admins=ad.data||[];render();fillRegions(reg.data||[]);}catch(e){msg(e.message,true);}}
+function render(){ $('rows').innerHTML=admins.map(a=>`<tr class="border-b border-slate-700/60"><td class="p-2 font-mono">${esc(a.nrp)}</td><td class="p-2">${esc(a.nama)}</td><td class="p-2">${esc(a.role)}</td><td class="p-2 text-xs">${esc((a.wilayah||[]).join(', ')||'SEMUA')}</td><td class="p-2 text-center">${a.aktif?'AKTIF':'NONAKTIF'}</td><td class="p-2 text-center"><button class="text-blue-300 mr-2" onclick="edit(${a.id})">Edit</button><button class="text-amber-300" onclick="toggle(${a.id},${!a.aktif})">${a.aktif?'Nonaktifkan':'Aktifkan'}</button></td></tr>`).join('');}
+function fillRegions(regions){$('kecamatan').innerHTML=regions.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');}
+function openCreate(){resetForm();$('formTitle').textContent='Tambah Admin';$('pinHint').textContent='(wajib)';}
+function resetForm(){$('form').reset();$('adminId').value='';$('aktif').checked=true;[...$('kecamatan').options].forEach(o=>o.selected=false);}
+function edit(id){const a=admins.find(x=>x.id===id);if(!a)return;$('formTitle').textContent='Edit Admin';$('adminId').value=a.id;$('nrp').value=a.nrp;$('nama').value=a.nama;$('role').value=a.role==='SUPER_ADMIN'?'SUPERADMIN':a.role;$('aktif').checked=!!a.aktif;$('pin').value='';$('pinHint').textContent='(kosongkan jika tidak diubah)';const set=new Set(a.wilayah||[]);[...$('kecamatan').options].forEach(o=>o.selected=set.has(o.value));}
+async function saveAdmin(e){e.preventDefault();try{const id=$('adminId').value;const role=$('role').value;const kec=[...$('kecamatan').selectedOptions].map(o=>o.value);const payload={admin_id:id||String(0),nrp:$('nrp').value,nama:$('nama').value,role,pin:$('pin').value,aktif:$('aktif').checked,kecamatan:kec};const r=await api(id?'UPDATE_ADMIN':'CREATE_ADMIN',payload);msg(id?'Admin berhasil diperbarui.':'Admin berhasil dibuat.');resetForm();await load();}catch(e){msg(e.message,true);}}
+async function toggle(id,aktif){if(!confirm(`${aktif?'Aktifkan':'Nonaktifkan'} admin ini?`))return;try{await api('SET_ADMIN_STATUS',{admin_id:String(id),aktif});msg('Status admin diperbarui.');await load();}catch(e){msg(e.message,true);}}
+async function logout(){await fetch('/api/admin-logout',{method:'POST',credentials:'include'});location='/login';}
+load();
+</script>
+</body></html>

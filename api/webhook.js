@@ -1,18 +1,48 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 import { createWorker } from 'tesseract.js';
 import { waitUntil } from '@vercel/functions';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
-
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const GDRIVE_WEBHOOK_URL = process.env.GDRIVE_WEBHOOK_URL;
 const MAX_CALON = 5;
+const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+
+async function claimTelegramUpdate(updateId) {
+  if (!Number.isSafeInteger(updateId)) return true;
+
+  // Keep the dedupe table bounded without requiring a cron job.
+  if (updateId % 100 === 0) {
+    await supabase
+      .from('telegram_updates')
+      .delete()
+      .lt('received_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  }
+
+  const { error } = await supabase
+    .from('telegram_updates')
+    .insert({ update_id: updateId, processed_at: null });
+  if (!error) return true;
+  if (error.code === '23505') return false;
+  console.error('[WEBHOOK] UPDATE DEDUPE ERROR:', error);
+  return true;
+}
+
+async function markTelegramUpdateProcessed(updateId) {
+  if (!Number.isSafeInteger(updateId)) return;
+  const { error } = await supabase
+    .from('telegram_updates')
+    .update({ processed_at: new Date().toISOString() })
+    .eq('update_id', updateId);
+  if (error) console.error('[WEBHOOK] UPDATE MARK ERROR:', error);
+}
+
+async function finishWebhook(res, updateId, payload = { ok: true }) {
+  await markTelegramUpdateProcessed(updateId);
+  return res.status(200).json(payload);
+}
 
 /* =========================================================
    UTILITAS & TELEGRAM API
@@ -1135,17 +1165,29 @@ if (
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).send('OK');
 
+  if (TELEGRAM_WEBHOOK_SECRET && req.headers['x-telegram-bot-api-secret-token'] !== TELEGRAM_WEBHOOK_SECRET) {
+    return res.status(401).json({ ok: false });
+  }
+
+  let updateId = null;
+
   try {
     const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    if (!update) return res.status(200).json({ ok: true });
+    if (!update) return finishWebhook(res, updateId, { ok: true });
+
+    updateId = Number(update.update_id);
+    if (Number.isSafeInteger(updateId)) {
+      const claimed = await claimTelegramUpdate(updateId);
+      if (!claimed) return res.status(200).json({ ok: true, duplicate: true });
+    }
 
     if (update.callback_query) {
       await handleCallback(update.callback_query);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     const message = update.message;
-    if (!message) return res.status(200).json({ ok: true });
+    if (!message) return finishWebhook(res, updateId, { ok: true });
 
     const chatId = String(message.chat?.id || '');
     const text = message.text ? String(message.text).trim() : '';
@@ -1167,7 +1209,7 @@ export default async function handler(req, res) {
           `Untuk melakukan registrasi petugas, ketik:\n\n<code>/reg NRP</code>\n\nContoh:\n<code>/reg 12345678</code>`;
         await sendMessage(chatId, msg);
       }
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (command === '/help' || command.startsWith('/help@')) {
@@ -1182,7 +1224,7 @@ export default async function handler(req, res) {
         `<code>/batal</code> - Batal proses\n` +
         `<code>/help</code> - Bantuan`;
       await sendMessage(chatId, msg);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (command === '/batal' || command.startsWith('/batal@')) {
@@ -1201,7 +1243,7 @@ export default async function handler(req, res) {
         });
       }
       await removeKeyboard(chatId, `✅ Proses dibatalkan.\nKetik /start untuk kembali.`);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     const { data: waitUser } = await supabase.from('master_petugas').select('*').eq('chat_id_telegram', `WAIT_${chatId}`).maybeSingle();
@@ -1216,7 +1258,7 @@ export default async function handler(req, res) {
           if (updateErr) {
             console.error('GAGAL UPDATE CHAT ID:', updateErr);
             await sendMessage(chatId, `❌ Terjadi kesalahan sistem saat menyimpan verifikasi.`);
-            return res.status(200).json({ ok: true });
+            return finishWebhook(res, updateId, { ok: true });
           }
 
           await logAktivitas({
@@ -1244,7 +1286,7 @@ export default async function handler(req, res) {
 
           await sendMessage(chatId, `❌ <b>PIN SALAH, SILAHKAN INPUT KEMBALI ATAU HUBUNGI ADMIN</b>\n\nuntuk membatalkan proses ketik /batal`);
         }
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
     }
 
@@ -1253,7 +1295,7 @@ export default async function handler(req, res) {
     if (command === '/reg' || command.startsWith('/reg@')) {
       if (petugas) {
         await sendMessage(chatId, `👤 <b>ANDA SUDAH TERDAFTAR</b>\n\nNama : ${escapeHtml(petugas.nama_petugas)}\nNRP : ${escapeHtml(petugas.nrp)}`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const parts = text.split(/\s+/);
@@ -1261,7 +1303,7 @@ export default async function handler(req, res) {
 
       if (!nrpInput) {
         await sendMessage(chatId, `⚠️ <b>FORMAT SALAH</b>\nContoh: <code>/reg 12345678</code>`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const { data: masterP } = await supabase.from('master_petugas').select('*').eq('nrp', nrpInput).maybeSingle();
@@ -1272,7 +1314,7 @@ export default async function handler(req, res) {
           keterangan: `Percobaan registrasi gagal: NRP ${nrpInput} tidak ditemukan`
         });
         await sendMessage(chatId, `❌ <b>NRP TIDAK TERDAFTAR. SILAHKAN HUBUNGI ADMIN</b>`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       await supabase.from('master_petugas').update({ chat_id_telegram: `WAIT_${chatId}` }).eq('nrp', nrpInput);
@@ -1287,12 +1329,12 @@ export default async function handler(req, res) {
       });
 
       await sendMessage(chatId, `✅ <b>NRP TERVERIFIKASI</b>\n\nHalo <b>${escapeHtml(masterP.nama_petugas)}</b>.\n\nNRP Anda berhasil ditemukan dalam database.\n\nSilakan masukkan <b>PIN Rahasia</b> Anda.\n\nJika ingin membatalkan:\n/batal`);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (!petugas) {
       await sendMessage(chatId, `🔐 <b>ANDA BELUM TERDAFTAR</b>\n\nSilakan registrasi terlebih dahulu:\n<code>/reg NRP</code>\n\nAtau ketik /help untuk panduan.`);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (command === '/status' || command.startsWith('/status@')) {
@@ -1317,7 +1359,7 @@ export default async function handler(req, res) {
         rincianStatus;
 
       await sendMessage(chatId, msg);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     /* =========================================================
@@ -1373,7 +1415,7 @@ export default async function handler(req, res) {
       const msg = `📊<b>HASIL SUARA DICATAT DESA ${escapeHtml(petugas.desa).toUpperCase()}</b>\n\n<pre>${tableText}</pre>`;
 
       await sendMessage(chatId, msg);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (command === '/kirimhasil' || command === '/edithasil') {
@@ -1396,7 +1438,7 @@ export default async function handler(req, res) {
 
       if (!isEditMode && allTps && allTps.every(t => filledSet.has(t.tps))) {
         await sendMessage(chatId, `SELURUH TPS SUDAH TERISI DATA. UNTUK EDIT DATA kirim /edithasil`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const availableTps = isEditMode ? allTps : allTps.filter(t => !filledSet.has(t.tps));
@@ -1407,7 +1449,7 @@ export default async function handler(req, res) {
         `Langkah 2:\nMasukkan jumlah suara sesuai contoh format yang diberikan.`;
 
       await sendMessage(chatId, msg, { keyboard, resize_keyboard: true, one_time_keyboard: true });
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (command === '/kirimplano') {
@@ -1426,13 +1468,13 @@ export default async function handler(req, res) {
       const keyboard = allTps?.map(t => [{ text: `📍 TPS ${t.tps}` }]);
 
       await sendMessage(chatId, `📷 <b>PILIH TPS UNTUK UPLOAD PLANO</b>`, { keyboard, resize_keyboard: true, one_time_keyboard: true });
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (Array.isArray(message.photo) && message.photo.length > 0) {
       if (!petugas.tps_aktif) {
         await sendMessage(chatId, `⚠️ TPS belum dipilih. Ketik /kirimplano atau /kirimhasil terlebih dahulu.`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const largestPhoto = message.photo[message.photo.length - 1];
@@ -1459,12 +1501,12 @@ export default async function handler(req, res) {
           ]
         };
         await sendMessage(chatId, `⚠️ <b>PERHATIAN</b>\n\nFoto C1 Plano untuk <b>TPS ${petugas.tps_aktif}</b> sudah pernah diunggah sebelumnya.\nApakah Anda ingin mengganti/menimpa foto lama dengan yang baru?`, keyboard);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       await sendMessage(chatId, `📷 Foto C1 Plano TPS ${petugas.tps_aktif} diterima dan sedang diproses di latar belakang.`);
       waitUntil(processPlanoPhotoInBackground(chatId, petugas.tps_aktif, largestPhoto.file_id, petugas));
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (text.startsWith('📍 TPS')) {
@@ -1490,14 +1532,14 @@ export default async function handler(req, res) {
         const example = Array(jumlahCalon).fill('0').concat(['0']).join('#');
         await removeKeyboard(chatId, `📌 <b>TPS ${tpsSelected} TERPILIH</b>\n\nSilakan masukkan suara dengan format:\n<code>${example}</code>`);
       }
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     if (text.includes('#')) {
       const tpsTarget = petugas.tps_aktif;
       if (!tpsTarget) {
         await sendMessage(chatId, `⚠️ Pilih TPS terlebih dahulu.`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon, total_dpt, dpt').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
@@ -1507,14 +1549,14 @@ export default async function handler(req, res) {
       const parsed = parseVoteInput(text, jumlahCalon);
       if (parsed.error) {
         await sendMessage(chatId, `❌ ${parsed.error}`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const vote = parsed.result;
 
       if (vote.total > dptLimit) {
         await sendMessage(chatId, `❌ TOTAL SUARA MELEBIHI DPT (${dptLimit}). SILAHKAN INPUT KEMBALI`);
-        return res.status(200).json({ ok: true });
+        return finishWebhook(res, updateId, { ok: true });
       }
 
       const keyboard = {
@@ -1526,15 +1568,15 @@ export default async function handler(req, res) {
 
       const msg = `📊 <b>HASIL SUARA DITERIMA</b>\n\n${buildSummaryText(tpsTarget, vote, jumlahCalon)}`;
       await sendMessage(chatId, msg, keyboard);
-      return res.status(200).json({ ok: true });
+      return finishWebhook(res, updateId, { ok: true });
     }
 
     await sendMessage(chatId, `ℹ️ Perintah tidak dikenali. Ketik /help untuk daftar menu.`);
-    return res.status(200).json({ ok: true });
+    return finishWebhook(res, updateId, { ok: true });
 
   } catch (error) {
     console.error('GLOBAL ERROR:', error);
-    return res.status(200).json({ ok: true });
+    return finishWebhook(res, updateId, { ok: true });
   }
 }
 
