@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   try {
     const [{ data: master, error: masterError }, { data, error }] = await Promise.all([
-      supabase.from('master_desa').select('kecamatan,desa,tps,jumlah_calon,total_dpt,dpt').order('kecamatan').order('desa').order('tps'),
+      supabase.from('master_desa').select('kecamatan,desa,tps,jumlah_calon,total_dpt').order('kecamatan').order('desa').order('tps'),
       supabase.from('hasil_suara').select(
         'id,kecamatan,desa,tps,nrp_saksi,nama_saksi,suara_calon_01,suara_calon_02,suara_calon_03,suara_calon_04,suara_calon_05,suara_tidak_sah,total_suara_masuk,status_verifikasi,timestamp'
       ).order('id', { ascending: false })

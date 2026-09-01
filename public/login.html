@@ -366,7 +366,9 @@ async function loginAdmin(event) {
     */
 
     window.location.href =
-      '/admin';
+      ['SUPERADMIN', 'SUPER_ADMIN'].includes(String(result.role || '').toUpperCase())
+        ? '/superadmin'
+        : '/admin';
 
 
   } catch (error) {

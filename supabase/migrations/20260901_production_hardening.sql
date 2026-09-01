@@ -69,6 +69,7 @@ where ocr_status = 'COMPLETED'
 order by hasil_suara_id, created_at desc nulls last, id desc;
 
 revoke all on public.latest_plano_uploads from anon, authenticated;
+grant select on public.latest_plano_uploads to service_role;
 
 -- Telegram webhook idempotency: Telegram may retry the same update.
 create table if not exists public.telegram_updates (

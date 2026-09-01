@@ -1542,9 +1542,9 @@ export default async function handler(req, res) {
         return finishWebhook(res, updateId, { ok: true });
       }
 
-      const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon, total_dpt, dpt').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
+      const { data: mDesa } = await supabase.from('master_desa').select('jumlah_calon, total_dpt').eq('kecamatan', petugas.kecamatan).eq('desa', petugas.desa).eq('tps', tpsTarget).maybeSingle();
       const jumlahCalon = mDesa?.jumlah_calon || 2;
-      const dptLimit = Number(mDesa?.total_dpt ?? mDesa?.dpt ?? 9999);
+      const dptLimit = Number(mDesa?.total_dpt ?? 9999);
 
       const parsed = parseVoteInput(text, jumlahCalon);
       if (parsed.error) {

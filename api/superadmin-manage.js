@@ -29,6 +29,17 @@ function parseBody(req) {
   return {};
 }
 
+function parseBoolean(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (v === 'true' || v === '1') return true;
+    if (v === 'false' || v === '0') return false;
+  }
+  if (typeof value === 'number') return value !== 0;
+  return null;
+}
+
 function securityHeaders(res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -84,7 +95,7 @@ export default async function handler(req, res) {
       p_nama: body.nama == null ? null : String(body.nama),
       p_role: body.role == null ? null : String(body.role),
       p_pin: body.pin == null ? null : String(body.pin),
-      p_aktif: body.aktif == null ? null : Boolean(body.aktif),
+      p_aktif: body.aktif == null ? null : parseBoolean(body.aktif),
       p_kecamatan: Array.isArray(body.kecamatan) ? body.kecamatan : null
     });
 
