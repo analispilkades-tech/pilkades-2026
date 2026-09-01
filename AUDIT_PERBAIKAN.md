@@ -77,3 +77,10 @@ Paket sumber ZIP awal yang dianalisis berisi 14 file, bukan 17 file. Audit dilak
 - `/api/livecount` tetap publik untuk pengunjung tanpa session, tetapi jika request membawa session admin maka server membatasi `master_desa` dan `hasil_suara` sesuai kecamatan yang diberikan pada `admin_kecamatan`.
 - SUPERADMIN tetap dapat melihat seluruh kecamatan.
 - Response Live Count untuk session admin menggunakan `Cache-Control: private, no-store` agar data antar-role tidak tersimpan di CDN cache publik.
+
+
+## Penyempurnaan UI Admin (2026-09-02)
+- Sidebar admin dapat di-collapse menjadi rail kecil agar area Live Count/iframe lebih luas.
+- Live Count dalam mode `embedded=admin` otomatis memilih kecamatan pertama untuk akun ADMIN_KECAMATAN; jika akun memiliki beberapa kecamatan, kecamatan lain tetap dapat dipilih.
+- Menu "Kelola Admin" tidak lagi ditampilkan di sidebar admin; akses Superadmin tetap melalui tombol Superadmin di topbar.
+- Setelah login, semua role diarahkan terlebih dahulu ke `/admin`; SUPERADMIN dapat masuk ke `/superadmin` melalui tombol Superadmin di topbar.

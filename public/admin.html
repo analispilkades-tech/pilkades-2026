@@ -97,22 +97,22 @@
   <div class="flex flex-col lg:flex-row gap-6 items-start">
 
     <!-- SIDEBAR NAVIGASI ADMIN -->
-    <aside class="w-full lg:w-60 shrink-0 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-3 lg:sticky lg:top-4">
-      <div class="px-3 py-2 mb-2">
-        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Menu Panel</div>
-        <div id="sidebarScope" class="text-xs text-slate-300 mt-1">Memuat hak akses...</div>
+    <aside id="adminSidebar" class="w-full lg:w-60 lg:min-w-[3.5rem] shrink-0 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-2 lg:sticky lg:top-4 transition-all duration-200">
+      <div class="flex items-center justify-between gap-2 px-2 py-2 mb-2">
+        <div id="sidebarHeader" class="min-w-0">
+          <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Menu Panel</div>
+          <div id="sidebarScope" class="text-xs text-slate-300 mt-1 truncate">Memuat hak akses...</div>
+        </div>
+        <button id="sidebarToggle" type="button" onclick="toggleAdminSidebar()" title="Sembunyikan menu" aria-label="Sembunyikan menu" class="shrink-0 w-9 h-9 rounded-lg bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold transition">☰</button>
       </div>
 
       <nav class="space-y-2">
-        <button id="navAudit" onclick="showAdminView('audit')" class="w-full text-left px-4 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm transition">
-          📋 Audit & Verifikasi
+        <button id="navAudit" onclick="showAdminView('audit')" title="Audit & Verifikasi" class="w-full text-left px-3 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm transition">
+          <span class="navIcon">📋</span> <span class="navLabel">Audit & Verifikasi</span>
         </button>
-        <button id="navLivecount" onclick="showAdminView('livecount')" class="w-full text-left px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold text-sm transition">
-          📊 Live Count
+        <button id="navLivecount" onclick="showAdminView('livecount')" title="Live Count" class="w-full text-left px-3 py-3 rounded-xl bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold text-sm transition">
+          <span class="navIcon">📊</span> <span class="navLabel">Live Count</span>
         </button>
-        <a id="navSuperadmin" href="/superadmin" class="hidden w-full text-left px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm transition">
-          ⚙️ Kelola Admin
-        </a>
       </nav>
     </aside>
 
@@ -881,7 +881,6 @@ document.addEventListener(
 
       if (isSuperadmin) {
         document.getElementById('superadminLink').classList.remove('hidden');
-        document.getElementById('navSuperadmin').classList.remove('hidden');
       }
 
       const scopeText = isSuperadmin
@@ -916,6 +915,35 @@ document.addEventListener(
 /*
 =========================================================
 NAVIGASI PANEL
+=========================================================
+*/
+
+function toggleAdminSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  const header = document.getElementById('sidebarHeader');
+  const scope = document.getElementById('sidebarScope');
+  const labels = document.querySelectorAll('.navLabel');
+  const toggle = document.getElementById('sidebarToggle');
+  const collapsed = sidebar.classList.toggle('sidebar-collapsed');
+
+  sidebar.classList.toggle('lg:w-60', !collapsed);
+  sidebar.classList.toggle('lg:w-14', collapsed);
+  header.classList.toggle('hidden', collapsed);
+  labels.forEach(el => el.classList.toggle('hidden', collapsed));
+  sidebar.querySelectorAll('nav button').forEach(btn => {
+    btn.classList.toggle('text-center', collapsed);
+    btn.classList.toggle('px-3', !collapsed);
+    btn.classList.toggle('px-0', collapsed);
+  });
+  toggle.textContent = collapsed ? '›' : '☰';
+  toggle.title = collapsed ? 'Tampilkan menu' : 'Sembunyikan menu';
+  toggle.setAttribute('aria-label', toggle.title);
+}
+
+
+/*
+=========================================================
+SIDEBAR COLLAPSE
 =========================================================
 */
 

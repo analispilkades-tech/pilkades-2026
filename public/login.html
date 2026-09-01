@@ -365,10 +365,9 @@ async function loginAdmin(event) {
     -----------------------------------------------------
     */
 
-    window.location.href =
-      ['SUPERADMIN', 'SUPER_ADMIN'].includes(String(result.role || '').toUpperCase())
-        ? '/superadmin'
-        : '/admin';
+    // Semua role masuk dulu ke dashboard utama /admin.
+    // SUPERADMIN tetap memiliki tombol Superadmin di topbar untuk membuka /superadmin.
+    window.location.href = '/admin';
 
 
   } catch (error) {
