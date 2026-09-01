@@ -69,3 +69,11 @@ Tanggal paket: 2026-09-01
 Paket kode membutuhkan dua migrasi Supabase sebelum deployment final. Lihat `DEPLOYMENT.md` untuk urutan dan environment variable.
 
 Paket sumber ZIP awal yang dianalisis berisi 14 file, bukan 17 file. Audit dilakukan terhadap seluruh isi ZIP tersebut; file tambahan di paket perbaikan adalah hasil hardening dan pemisahan endpoint.
+
+## UI PANEL ADMIN: SIDEBAR + LIVE COUNT TERBATAS ROLE
+- Panel `/admin` kini memiliki sidebar `Audit & Verifikasi`, `Live Count`, dan `Kelola Admin` untuk SUPERADMIN.
+- Top bar menampilkan identitas dengan format `Logged as: NAMA (SUPERADMIN)` atau `Logged as: NAMA (ADMIN KECAMATAN)`.
+- Tampilan Live Count di panel admin menggunakan tampilan publik yang sama melalui iframe.
+- `/api/livecount` tetap publik untuk pengunjung tanpa session, tetapi jika request membawa session admin maka server membatasi `master_desa` dan `hasil_suara` sesuai kecamatan yang diberikan pada `admin_kecamatan`.
+- SUPERADMIN tetap dapat melihat seluruh kecamatan.
+- Response Live Count untuk session admin menggunakan `Cache-Control: private, no-store` agar data antar-role tidak tersimpan di CDN cache publik.

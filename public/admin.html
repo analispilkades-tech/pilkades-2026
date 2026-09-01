@@ -93,9 +93,31 @@
      MAIN
 ====================================================== -->
 
-<div
-  class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow"
->
+<div class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow">
+  <div class="flex flex-col lg:flex-row gap-6 items-start">
+
+    <!-- SIDEBAR NAVIGASI ADMIN -->
+    <aside class="w-full lg:w-60 shrink-0 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-3 lg:sticky lg:top-4">
+      <div class="px-3 py-2 mb-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Menu Panel</div>
+        <div id="sidebarScope" class="text-xs text-slate-300 mt-1">Memuat hak akses...</div>
+      </div>
+
+      <nav class="space-y-2">
+        <button id="navAudit" onclick="showAdminView('audit')" class="w-full text-left px-4 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm transition">
+          📋 Audit & Verifikasi
+        </button>
+        <button id="navLivecount" onclick="showAdminView('livecount')" class="w-full text-left px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold text-sm transition">
+          📊 Live Count
+        </button>
+        <a id="navSuperadmin" href="/superadmin" class="hidden w-full text-left px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm transition">
+          ⚙️ Kelola Admin
+        </a>
+      </nav>
+    </aside>
+
+    <main class="flex-1 min-w-0 w-full">
+      <section id="auditView">
 
 
 <!-- =====================================================
@@ -279,7 +301,29 @@
 
 </div>
 
+</section>
+
+      <!-- LIVE COUNT: memakai /api/livecount yang otomatis dibatasi oleh session admin -->
+      <section id="livecountView" class="hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl p-4 md:p-6">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-white">📊 Live Count</h2>
+              <p id="livecountScopeText" class="text-xs text-slate-400 mt-1">Data live count sesuai hak akses akun.</p>
+            </div>
+            <span class="inline-flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-xs font-bold text-emerald-400">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> LIVE
+            </span>
+          </div>
+          <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
+            <iframe id="livecountFrame" title="Live Count Pilkades 2026" src="/?embedded=admin" class="w-full border-0" style="height: 1100px;"></iframe>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
+
 
 
 
@@ -815,17 +859,35 @@ document.addEventListener(
         await res.json();
 
 
-      document
-        .getElementById(
-          'adminNameDisplay'
-        )
-        .innerText =
-          `Logged as: ${result.admin.nama}`;
+      const adminRole = String(result.admin.role || '').trim().toUpperCase();
+      const isSuperadmin = ['SUPERADMIN', 'SUPER_ADMIN'].includes(adminRole);
+      const allowedKecamatan = Array.isArray(result.admin.kecamatan) ? result.admin.kecamatan : [];
 
-      if (['SUPERADMIN', 'SUPER_ADMIN'].includes(String(result.admin.role || '').toUpperCase())) {
-        document.getElementById('superadminLink').classList.remove('hidden');
+      let roleLabel = '';
+      if (isSuperadmin) {
+        roleLabel = 'SUPERADMIN';
+      } else {
+        const scopeText = allowedKecamatan.length ? allowedKecamatan.join(' / ') : 'BELUM DIATUR';
+        roleLabel = `ADMIN ${scopeText}`;
       }
 
+      document.getElementById('adminNameDisplay').innerText =
+        `Logged as: ${result.admin.nama} (${roleLabel})`;
+
+      document.getElementById('sidebarScope').innerText =
+        isSuperadmin
+          ? 'Akses seluruh kecamatan'
+          : `Kecamatan: ${allowedKecamatan.join(' / ') || 'Belum diatur'}`;
+
+      if (isSuperadmin) {
+        document.getElementById('superadminLink').classList.remove('hidden');
+        document.getElementById('navSuperadmin').classList.remove('hidden');
+      }
+
+      const scopeText = isSuperadmin
+        ? 'SUPERADMIN • seluruh kecamatan'
+        : `ADMIN KECAMATAN • ${allowedKecamatan.join(' / ') || 'Belum diatur'}`;
+      document.getElementById('livecountScopeText').innerText = scopeText;
 
       fetchAdminData();
 
@@ -849,6 +911,35 @@ document.addEventListener(
 
   }
 );
+
+
+/*
+=========================================================
+NAVIGASI PANEL
+=========================================================
+*/
+
+function showAdminView(view) {
+  const auditView = document.getElementById('auditView');
+  const livecountView = document.getElementById('livecountView');
+  const navAudit = document.getElementById('navAudit');
+  const navLivecount = document.getElementById('navLivecount');
+
+  const activeClass = 'w-full text-left px-4 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm transition';
+  const inactiveClass = 'w-full text-left px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-700 text-slate-300 font-bold text-sm transition';
+
+  if (view === 'livecount') {
+    auditView.classList.add('hidden');
+    livecountView.classList.remove('hidden');
+    navAudit.className = inactiveClass;
+    navLivecount.className = activeClass;
+  } else {
+    livecountView.classList.add('hidden');
+    auditView.classList.remove('hidden');
+    navLivecount.className = inactiveClass;
+    navAudit.className = activeClass;
+  }
+}
 
 
 /*
