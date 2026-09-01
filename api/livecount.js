@@ -65,6 +65,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      // Hanya dikirim untuk ADMIN_KECAMATAN. Public dan SUPERADMIN tetap normal.
+      admin_scope_kecamatan: Array.isArray(allowedKecamatan) ? allowedKecamatan : null,
       master_desa: Array.isArray(master) ? master : [],
       data: Array.isArray(data) ? data : []
     });

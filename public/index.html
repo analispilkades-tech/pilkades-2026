@@ -173,6 +173,9 @@
     let globalMasterDesa = [];
     let logIndex = 0;
     let logList = [];
+    // Di dalam dashboard admin, API mengirim daftar kecamatan yang boleh diakses.
+    // Untuk ADMIN_KECAMATAN, kecamatan pertama otomatis menjadi pilihan awal.
+    let adminScopedKecamatan = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -190,6 +193,9 @@
         
         globalMasterDesa = Array.isArray(result.master_desa) ? result.master_desa : [];
         const fetchedData = Array.isArray(result.data) ? result.data : [];
+        adminScopedKecamatan = Array.isArray(result.admin_scope_kecamatan) && result.admin_scope_kecamatan.length
+          ? result.admin_scope_kecamatan.map(k => String(k || '').trim()).filter(Boolean)
+          : null;
         rawData = fetchedData.filter(d => d.status_verifikasi !== 'REJECTED');
         
         populateKecamatan();
@@ -207,8 +213,22 @@
       const dataSource = globalMasterDesa.length > 0 ? globalMasterDesa : rawData;
       const kecList = [...new Set(dataSource.map(item => String(item.kecamatan || '').trim()).filter(Boolean))].sort();
 
+      // Jika request berasal dari ADMIN_KECAMATAN, server sudah membatasi data
+      // ke wilayah yang diizinkan. Pilih kecamatan pertama secara otomatis.
+      // Bila hak akses mencakup beberapa kecamatan, semuanya tetap tersedia di dropdown.
+      let selectedKec = currentKec;
+      if (Array.isArray(adminScopedKecamatan) && adminScopedKecamatan.length) {
+        const currentAllowed = adminScopedKecamatan.some(k => k.toUpperCase() === String(currentKec).toUpperCase());
+        if (!currentAllowed) selectedKec = adminScopedKecamatan[0];
+      }
+
       kecSelect.innerHTML = '<option value="">-- Pilih Kecamatan --</option>' + 
-        kecList.map(k => `<option value="${escapeHtml(k)}" ${k.toUpperCase() === currentKec.toUpperCase() ? 'selected' : ''}>${escapeHtml(k)}</option>`).join('');
+        kecList.map(k => `<option value="${escapeHtml(k)}" ${k.toUpperCase() === String(selectedKec).toUpperCase() ? 'selected' : ''}>${escapeHtml(k)}</option>`).join('');
+
+      // Jalankan onchange setelah pilihan otomatis terpasang agar Desa/TPS ikut aktif.
+      if (selectedKec && selectedKec !== currentKec) {
+        onKecChange();
+      }
     }
 
     function onKecChange() {
